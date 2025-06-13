@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System; // Додано для TimeSpan
+using TransportLogistics.Api.Contracts; // Для IJwtTokenService
+using TransportLogistics.Api.Services;   // Для JwtTokenService
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,7 +34,10 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
         options.User.RequireUniqueEmail = true; // Вимагаємо унікальну пошту
     })
     .AddEntityFrameworkStores<ApplicationDbContext>() // Вказуємо, що Identity буде використовувати EF Core
+    
     .AddDefaultTokenProviders(); // Додаємо провайдерів токенів для скидання пароля тощо
+// Реєстрація нашого JWT сервісу
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 // === Додаємо налаштування JWT Authentication ===
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -59,6 +64,7 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero // Відключити похибку годинника (токен має бути дійсним рівно до вказаного часу)
     };
 });
+
 // ===============================================
 
 var app = builder.Build();
