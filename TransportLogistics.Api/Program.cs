@@ -6,8 +6,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System; // Додано для TimeSpan
+using System.Collections.Generic;
 using TransportLogistics.Api.Contracts; // Для IJwtTokenService
 using TransportLogistics.Api.Services;   // Для JwtTokenService
+using TransportLogistics.Api.Repositories; // Для DriverRepository
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +18,41 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Додаємо Swagger/OpenAPI для документування API
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "TransportLogistics.Api", Version = "v1" });
+
+    // Визначаємо схему безпеки для JWT (Bearer Token)
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = @"JWT Authorization header using the Bearer scheme.
+                      Enter 'Bearer' [space] and then your token in the text input below.
+                      Example: 'Bearer 12345abcdef'",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    // Додаємо вимоги безпеки для всіх операцій
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement()
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+});
 
 // Налаштування DbContext для PostgreSQL
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -38,6 +74,12 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
     .AddDefaultTokenProviders(); // Додаємо провайдерів токенів для скидання пароля тощо
 // Реєстрація нашого JWT сервісу
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+// Реєстрація репозиторію для Driver
+builder.Services.AddScoped<IDriverRepository, DriverRepository>();
+
+// Реєстрація сервісу для Driver
+builder.Services.AddScoped<IDriverService, DriverService>();
 
 // === Додаємо налаштування JWT Authentication ===
 var jwtSettings = builder.Configuration.GetSection("Jwt");
