@@ -2,6 +2,10 @@
 using TransportLogistics.Api.Data;
 using TransportLogistics.Api.Data.Entities;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System; // Додано для TimeSpan
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +34,32 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>() // Вказуємо, що Identity буде використовувати EF Core
     .AddDefaultTokenProviders(); // Додаємо провайдерів токенів для скидання пароля тощо
 
+// === Додаємо налаштування JWT Authentication ===
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!); // Отримання секретного ключа з appsettings.json
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // У продакшені має бути true (для HTTPS)
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = true, // Валідувати емітента
+        ValidIssuer = jwtSettings["Issuer"], // Емітент з appsettings.json
+        ValidateAudience = true, // Валідувати аудиторію
+        ValidAudience = jwtSettings["Audience"], // Аудиторія з appsettings.json
+        ValidateLifetime = true, // Валідувати термін дії токену
+        ClockSkew = TimeSpan.Zero // Відключити похибку годинника (токен має бути дійсним рівно до вказаного часу)
+    };
+});
+// ===============================================
 
 var app = builder.Build();
 
@@ -42,7 +72,10 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection(); // Ми вимкнули HTTPS для простоти, але якщо ввімкнете, то це потрібно
 
-app.UseAuthorization(); // Дозволяємо використання авторизації
+app.UseRouting(); // Цей рядок завжди має бути перед UseAuthentication та UseAuthorization
+
+app.UseAuthentication(); // !!! ВАЖЛИВО: цей рядок має бути перед UseAuthorization !!!
+app.UseAuthorization();  // Дозволяємо використання авторизації
 
 app.MapControllers();
 

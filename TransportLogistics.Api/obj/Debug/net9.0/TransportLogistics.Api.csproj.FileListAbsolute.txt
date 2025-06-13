@@ -130,3 +130,11 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.pdb
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.genruntimeconfig.cache
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/ref/TransportLogistics.Api.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Abstractions.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.JsonWebTokens.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Logging.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Tokens.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.IdentityModel.Tokens.Jwt.dll
