@@ -2,8 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace TransportLogistics.Api.Data.Entities
-{
+namespace TransportLogistics.Api.Data.Entities {
     public class User : IdentityUser<Guid>
     {
         // Додаткові властивості користувача
