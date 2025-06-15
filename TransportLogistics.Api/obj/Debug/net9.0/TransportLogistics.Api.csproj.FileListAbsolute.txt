@@ -1,9 +1,3 @@
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.csproj.AssemblyReference.cache
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.GeneratedMSBuildEditorConfig.editorconfig
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.AssemblyInfoInputs.cache
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.AssemblyInfo.cs
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.csproj.CoreCompileInputs.cache
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.sourcelink.json
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/appsettings.json
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/TransportLogistics.Api.staticwebassets.endpoints.json
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/TransportLogistics.Api
@@ -12,6 +6,7 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/TransportLogistics.Api.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/TransportLogistics.Api.pdb
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Humanizer.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Cryptography.Internal.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
@@ -39,6 +34,12 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.Extensions.Logging.Abstractions.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.Extensions.Options.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.Extensions.Primitives.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Abstractions.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.JsonWebTokens.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Logging.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Tokens.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.OpenApi.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Mono.TextTemplating.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Npgsql.dll
@@ -52,6 +53,7 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.Composition.Hosting.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.Composition.Runtime.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.Composition.TypedParts.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.IdentityModel.Tokens.Jwt.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/cs/Microsoft.CodeAnalysis.resources.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/de/Microsoft.CodeAnalysis.resources.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/es/Microsoft.CodeAnalysis.resources.dll
@@ -117,8 +119,14 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/tr/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/zh-Hans/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/zh-Hant/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.csproj.AssemblyReference.cache
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.GeneratedMSBuildEditorConfig.editorconfig
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.AssemblyInfoInputs.cache
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.AssemblyInfo.cs
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.csproj.CoreCompileInputs.cache
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.MvcApplicationPartsAssemblyInfo.cs
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.MvcApplicationPartsAssemblyInfo.cache
+/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.sourcelink.json
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/scopedcss/bundle/TransportLogistics.Api.styles.css
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/staticwebassets.build.json
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/staticwebassets.build.json.cache
@@ -130,11 +138,3 @@
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.pdb
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/TransportLogistics.Api.genruntimeconfig.cache
 /Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/obj/Debug/net9.0/ref/TransportLogistics.Api.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Abstractions.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.JsonWebTokens.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Logging.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/Microsoft.IdentityModel.Tokens.dll
-/Users/arsenkhomiak/Компуктер/Робота Чну/practise_sum/TransportLogistics/TransportLogistics.Api/bin/Debug/net9.0/System.IdentityModel.Tokens.Jwt.dll

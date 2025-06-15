@@ -1,3 +1,4 @@
+// TransportLogistics.Api/Controllers/DriverController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportLogistics.Api.Contracts;
@@ -10,7 +11,7 @@ namespace TransportLogistics.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // Всі методи в цьому контролері вимагають аутентифікації
+    [Authorize] // Застосовуємо авторизацію до всього контролера
     public class DriverController : ControllerBase
     {
         private readonly IDriverService _driverService;
@@ -20,31 +21,44 @@ namespace TransportLogistics.Api.Controllers
             _driverService = driverService;
         }
 
+        // GET: api/Driver
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DriverDto>>> GetAll()
+        [ProducesResponseType(typeof(List<DriverDto>), 200)]
+        public async Task<ActionResult<List<DriverDto>>> GetAllDrivers()
         {
             var drivers = await _driverService.GetAllDriversAsync();
             return Ok(drivers);
         }
 
+        // GET: api/Driver/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<DriverDto>> GetById(Guid id)
+        [ProducesResponseType(typeof(DriverDto), 200)]
+        [ProducesResponseType(404)]
+        public async Task<ActionResult<DriverDto>> GetDriverById(Guid id)
         {
             var driver = await _driverService.GetDriverByIdAsync(id);
             if (driver == null)
             {
-                return NotFound();
+                return NotFound($"Driver with ID {id} not found.");
             }
             return Ok(driver);
         }
 
+        // POST: api/Driver
         [HttpPost]
-        public async Task<ActionResult<DriverDto>> Create([FromBody] CreateDriverRequest request)
+        [ProducesResponseType(typeof(DriverDto), 201)]
+        [ProducesResponseType(400)]
+        public async Task<ActionResult<DriverDto>> CreateDriver([FromBody] CreateDriverRequest request)
         {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
             try
             {
-                var driver = await _driverService.CreateDriverAsync(request);
-                return CreatedAtAction(nameof(GetById), new { id = driver.Id }, driver);
+                var newDriver = await _driverService.CreateDriverAsync(request);
+                return CreatedAtAction(nameof(GetDriverById), new { id = newDriver.Id }, newDriver);
             }
             catch (ArgumentException ex)
             {
@@ -52,31 +66,46 @@ namespace TransportLogistics.Api.Controllers
             }
         }
 
+        // PUT: api/Driver/{id}
         [HttpPut("{id}")]
-        public async Task<ActionResult<DriverDto>> Update(Guid id, [FromBody] UpdateDriverRequest request)
+        [ProducesResponseType(typeof(DriverDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<ActionResult<DriverDto>> UpdateDriver(Guid id, [FromBody] UpdateDriverRequest request)
         {
-            if (id != request.Id)
+            if (!ModelState.IsValid)
             {
-                return BadRequest("ID in URL does not match ID in request body.");
+                return BadRequest(ModelState);
             }
 
-            var updatedDriver = await _driverService.UpdateDriverAsync(request);
-            if (updatedDriver == null)
+            try
             {
-                return NotFound();
+                // ПОМИЛКА БУЛА ТУТ - ТРЕБА ПЕРЕДАТИ ОБ'ЄКТ request
+                var updatedDriver = await _driverService.UpdateDriverAsync(id, request);
+                if (updatedDriver == null)
+                {
+                    return NotFound($"Driver with ID {id} not found.");
+                }
+                return Ok(updatedDriver);
             }
-            return Ok(updatedDriver);
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
+        // DELETE: api/Driver/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(Guid id)
+        [ProducesResponseType(204)]
+        [ProducesResponseType(404)]
+        public async Task<ActionResult> DeleteDriver(Guid id)
         {
-            var result = await _driverService.DeleteDriverAsync(id);
-            if (!result)
+            var deleted = await _driverService.DeleteDriverAsync(id);
+            if (!deleted)
             {
-                return NotFound();
+                return NotFound($"Driver with ID {id} not found.");
             }
-            return NoContent(); // 204 No Content - успішно видалено
+            return NoContent(); // 204 No Content for successful deletion
         }
     }
 }

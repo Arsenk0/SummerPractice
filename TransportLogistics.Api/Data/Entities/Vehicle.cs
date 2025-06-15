@@ -1,40 +1,51 @@
+// TransportLogistics.Api/Data/Entities/Vehicle.cs
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Collections.Generic; // Для ICollection<Order>
 
 namespace TransportLogistics.Api.Data.Entities
 {
+    public enum VehicleType
+    {
+        Truck,
+        Van,
+        Trailer,
+        Car
+    }
+
     public class Vehicle
     {
         [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public Guid Id { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [StringLength(50)]
-        public string Make { get; set; } = string.Empty; // Марка (наприклад, Volvo, Mercedes)
+        [MaxLength(50)]
+        public string Make { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(50)]
-        public string Model { get; set; } = string.Empty; // Модель (наприклад, FH16, Actros)
+        [MaxLength(50)]
+        public string Model { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(20)]
-        public string LicensePlate { get; set; } = string.Empty; // Номерний знак
+        [MaxLength(20)]
+        public string LicensePlate { get; set; } = string.Empty;
 
         [Required]
-        public int Year { get; set; } // Рік випуску
+        public int Year { get; set; }
 
-        [Column(TypeName = "decimal(18,2)")] // Вантажопідйомність (наприклад, в тоннах)
-        public decimal LoadCapacity { get; set; }
+        [Required]
+        public VehicleType Type { get; set; }
 
-        [StringLength(50)]
-        public string? VehicleType { get; set; } // Тип транспортного засобу (наприклад, "Вантажівка", "Фургон", "Рефрижератор")
+        [Required]
+        [Range(100.0, 50000.0)]
+        public double MaxWeightCapacityKg { get; set; }
 
-        public bool IsAvailable { get; set; } = true; // Чи доступний зараз для замовлень
+        [Required]
+        [Range(1.0, 500.0)]
+        public double MaxVolumeCapacityM3 { get; set; }
 
-        // Зв'язок один-до-багатьох з Order (один транспортний засіб може бути у багатьох замовленнях)
+        public bool IsAvailable { get; set; } = true;
+
         public ICollection<Order> Orders { get; set; } = new List<Order>();
     }
 }

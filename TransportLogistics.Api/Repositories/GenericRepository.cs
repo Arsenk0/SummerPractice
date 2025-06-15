@@ -1,3 +1,4 @@
+// TransportLogistics.Api/Repositories/GenericRepository.cs
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -5,7 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using TransportLogistics.Api.Contracts;
-using TransportLogistics.Api.Data; // Додаємо using для ApplicationDbContext
+using TransportLogistics.Api.Data;
 
 namespace TransportLogistics.Api.Repositories
 {
@@ -20,13 +21,12 @@ namespace TransportLogistics.Api.Repositories
             _dbSet = context.Set<T>();
         }
 
-        public async Task<T?> GetByIdAsync(TId id)
+        public virtual async Task<T?> GetByIdAsync(TId id) // Зроблено virtual
         {
-            // FindAsync працює з первинним ключем. Потрібно перетворити TId на object.
             return await _dbSet.FindAsync(id);
         }
 
-        public async Task<IEnumerable<T>> GetAllAsync()
+        public virtual async Task<List<T>> GetAllAsync() // Зроблено virtual, повертає List<T>
         {
             return await _dbSet.ToListAsync();
         }
@@ -39,22 +39,24 @@ namespace TransportLogistics.Api.Repositories
         public async Task AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
+            await SaveChangesAsync();
         }
 
-        public void Update(T entity)
+        public async Task UpdateAsync(T entity)
         {
-            _dbSet.Attach(entity);
-            _context.Entry(entity).State = EntityState.Modified;
+            _dbSet.Update(entity);
+            await SaveChangesAsync();
         }
 
-        public void Delete(T entity)
+        public async Task DeleteAsync(T entity)
         {
             _dbSet.Remove(entity);
+            await SaveChangesAsync();
         }
 
-        public async Task<int> SaveChangesAsync()
+        public async Task SaveChangesAsync()
         {
-            return await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
         }
     }
 }

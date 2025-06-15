@@ -1,3 +1,4 @@
+// TransportLogistics.Api/Services/DriverService.cs
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.Data.Entities;
 using TransportLogistics.Api.DTOs;
@@ -5,15 +6,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity; // Для UserManager та User
-using Microsoft.EntityFrameworkCore; // Для Include
+using Microsoft.AspNetCore.Identity; // Для UserManager
 
 namespace TransportLogistics.Api.Services
 {
     public class DriverService : IDriverService
     {
         private readonly IDriverRepository _driverRepository;
-        private readonly UserManager<User> _userManager;
+        private readonly UserManager<User> _userManager; // Для доступу до User
 
         public DriverService(IDriverRepository driverRepository, UserManager<User> userManager)
         {
@@ -21,114 +21,157 @@ namespace TransportLogistics.Api.Services
             _userManager = userManager;
         }
 
-        public async Task<IEnumerable<DriverDto>> GetAllDriversAsync()
+        public async Task<List<DriverDto>> GetAllDriversAsync()
         {
-            // Включаємо User, щоб отримати FirstName та LastName
             var drivers = await _driverRepository.GetAllAsync();
             var driverDtos = new List<DriverDto>();
 
             foreach (var driver in drivers)
             {
-                var user = await _userManager.FindByIdAsync(driver.UserId.ToString()!);
+                var user = await _userManager.FindByIdAsync(driver.UserId.ToString());
                 driverDtos.Add(new DriverDto
                 {
                     Id = driver.Id,
+                    FirstName = driver.FirstName,
+                    LastName = driver.LastName,
                     LicenseNumber = driver.LicenseNumber,
                     DateOfBirth = driver.DateOfBirth,
-                    UserId = driver.UserId ?? Guid.Empty, // Забезпечуємо ненульове значення
-                    UserName = user?.UserName ?? "N/A",
-                    FirstName = user?.FirstName ?? "N/A",
-                    LastName = user?.LastName ?? "N/A"
+                    IsAvailable = driver.IsAvailable,
+                    UserId = driver.UserId,
+                    UserName = user?.UserName, // ?. для безпечного доступу
+                    Email = user?.Email        // ?. для безпечного доступу
                 });
             }
-
             return driverDtos;
         }
 
         public async Task<DriverDto?> GetDriverByIdAsync(Guid id)
         {
             var driver = await _driverRepository.GetByIdAsync(id);
-            if (driver == null) return null;
+            if (driver == null)
+            {
+                return null;
+            }
 
-            var user = await _userManager.FindByIdAsync(driver.UserId.ToString()!);
-
+            var user = await _userManager.FindByIdAsync(driver.UserId.ToString());
             return new DriverDto
             {
                 Id = driver.Id,
+                FirstName = driver.FirstName,
+                LastName = driver.LastName,
                 LicenseNumber = driver.LicenseNumber,
                 DateOfBirth = driver.DateOfBirth,
-                UserId = driver.UserId ?? Guid.Empty,
-                UserName = user?.UserName ?? "N/A",
-                FirstName = user?.FirstName ?? "N/A",
-                LastName = user?.LastName ?? "N/A"
+                IsAvailable = driver.IsAvailable,
+                UserId = driver.UserId,
+                UserName = user?.UserName,
+                Email = user?.Email
             };
         }
 
         public async Task<DriverDto> CreateDriverAsync(CreateDriverRequest request)
         {
+            // Перевіряємо, чи існує користувач з таким UserId
             var user = await _userManager.FindByIdAsync(request.UserId.ToString());
             if (user == null)
             {
-                throw new ArgumentException("User with provided ID does not exist.");
+                throw new ArgumentException($"User with ID {request.UserId} not found.");
             }
 
-            var newDriver = new Driver
+            // Перевіряємо, чи вже існує водій для цього користувача
+            var existingDriver = (await _driverRepository.FindAsync(d => d.UserId == request.UserId)).FirstOrDefault();
+            if (existingDriver != null)
             {
+                throw new ArgumentException($"Driver already exists for User ID {request.UserId}.");
+            }
+
+            var driver = new Driver
+            {
+                Id = Guid.NewGuid(),
+                FirstName = request.FirstName,
+                LastName = request.LastName,
                 LicenseNumber = request.LicenseNumber,
                 DateOfBirth = request.DateOfBirth,
-                UserId = request.UserId,
-                FirstName = user.FirstName ?? string.Empty, // Або user.FirstName!
-                LastName = user.LastName ?? string.Empty    // Або user.LastName!
+                IsAvailable = true, // За замовчуванням доступний
+                UserId = request.UserId // Без ??, оскільки UserId вже Guid
             };
 
-            await _driverRepository.AddAsync(newDriver);
-            await _driverRepository.SaveChangesAsync();
+            await _driverRepository.AddAsync(driver);
 
             return new DriverDto
             {
-                Id = newDriver.Id,
-                LicenseNumber = newDriver.LicenseNumber,
-                DateOfBirth = newDriver.DateOfBirth,
-                UserId = newDriver.UserId ?? Guid.Empty,
-                UserName = user.UserName ?? "N/A",
-                FirstName = user.FirstName ?? "N/A",
-                LastName = user.LastName ?? "N/A"
+                Id = driver.Id,
+                FirstName = driver.FirstName,
+                LastName = driver.LastName,
+                LicenseNumber = driver.LicenseNumber,
+                DateOfBirth = driver.DateOfBirth,
+                IsAvailable = driver.IsAvailable,
+                UserId = driver.UserId,
+                UserName = user.UserName,
+                Email = user.Email
             };
         }
 
-        public async Task<DriverDto?> UpdateDriverAsync(UpdateDriverRequest request)
+        public async Task<DriverDto?> UpdateDriverAsync(Guid id, UpdateDriverRequest request)
         {
-            var existingDriver = await _driverRepository.GetByIdAsync(request.Id);
-            if (existingDriver == null) return null;
+            if (id != request.Id)
+            {
+                throw new ArgumentException("ID in URL does not match ID in request body.");
+            }
 
-            existingDriver.LicenseNumber = request.LicenseNumber;
-            existingDriver.DateOfBirth = request.DateOfBirth;
-            // existingDriver.IsAvailable = request.IsAvailable; // Якщо ви хочете дозволити оновлювати IsAvailable
+            var driverToUpdate = await _driverRepository.GetByIdAsync(id);
+            if (driverToUpdate == null)
+            {
+                return null; // Водія не знайдено
+            }
 
-            _driverRepository.Update(existingDriver);
-            await _driverRepository.SaveChangesAsync();
+            // Перевіряємо, чи існує користувач з таким UserId, якщо він змінюється
+            if (request.UserId != driverToUpdate.UserId)
+            {
+                var newUser = await _userManager.FindByIdAsync(request.UserId.ToString());
+                if (newUser == null)
+                {
+                    throw new ArgumentException($"New User with ID {request.UserId} not found.");
+                }
+                // Перевіряємо, чи вже є інший водій, призначений на нового користувача
+                var existingDriverForNewUser = (await _driverRepository.FindAsync(d => d.UserId == request.UserId && d.Id != id)).FirstOrDefault();
+                if (existingDriverForNewUser != null)
+                {
+                    throw new ArgumentException($"Another driver already exists for New User ID {request.UserId}.");
+                }
+            }
+            
+            driverToUpdate.FirstName = request.FirstName;
+            driverToUpdate.LastName = request.LastName;
+            driverToUpdate.LicenseNumber = request.LicenseNumber;
+            driverToUpdate.DateOfBirth = request.DateOfBirth;
+            driverToUpdate.IsAvailable = request.IsAvailable;
+            driverToUpdate.UserId = request.UserId; // Без ??, оскільки UserId вже Guid
 
-            var user = await _userManager.FindByIdAsync(existingDriver.UserId.ToString()!);
+            await _driverRepository.UpdateAsync(driverToUpdate); // Використовуємо UpdateAsync
 
+            var user = await _userManager.FindByIdAsync(driverToUpdate.UserId.ToString());
             return new DriverDto
             {
-                Id = existingDriver.Id,
-                LicenseNumber = existingDriver.LicenseNumber,
-                DateOfBirth = existingDriver.DateOfBirth,
-                UserId = existingDriver.UserId ?? Guid.Empty,
-                UserName = user?.UserName ?? "N/A",
-                FirstName = user?.FirstName ?? "N/A",
-                LastName = user?.LastName ?? "N/A"
+                Id = driverToUpdate.Id,
+                FirstName = driverToUpdate.FirstName,
+                LastName = driverToUpdate.LastName,
+                LicenseNumber = driverToUpdate.LicenseNumber,
+                DateOfBirth = driverToUpdate.DateOfBirth,
+                IsAvailable = driverToUpdate.IsAvailable,
+                UserId = driverToUpdate.UserId,
+                UserName = user?.UserName,
+                Email = user?.Email
             };
         }
 
         public async Task<bool> DeleteDriverAsync(Guid id)
         {
-            var driver = await _driverRepository.GetByIdAsync(id);
-            if (driver == null) return false;
-
-            _driverRepository.Delete(driver);
-            await _driverRepository.SaveChangesAsync();
+            var driverToDelete = await _driverRepository.GetByIdAsync(id);
+            if (driverToDelete == null)
+            {
+                return false; // Водія не знайдено
+            }
+            await _driverRepository.DeleteAsync(driverToDelete); // Використовуємо DeleteAsync
             return true;
         }
     }

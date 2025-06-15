@@ -1,46 +1,41 @@
+// TransportLogistics.Api/Data/Entities/Driver.cs
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Collections.Generic; // Для ICollection<Order>
 
 namespace TransportLogistics.Api.Data.Entities
 {
     public class Driver
     {
         [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public Guid Id { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         [Required]
-        [StringLength(100)]
+        [MaxLength(50)]
         public string FirstName { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(100)]
+        [MaxLength(50)]
         public string LastName { get; set; } = string.Empty;
 
-        [StringLength(100)]
-        public string? MiddleName { get; set; }
+        [Required]
+        [MaxLength(20)]
+        [MinLength(5)]
+        public string LicenseNumber { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(20)]
-        public string LicenseNumber { get; set; } = string.Empty; // Номер водійських прав
-
+        [Column(TypeName = "date")]
         public DateTime DateOfBirth { get; set; }
 
-        [Phone]
-        [StringLength(20)]
-        public string? PhoneNumber { get; set; }
+        public bool IsAvailable { get; set; } = true;
 
-        [EmailAddress]
-        [StringLength(100)]
-        public string? Email { get; set; }
+        [Required]
+        public Guid UserId { get; set; }
 
-        // Зв'язок один-до-одного з User (необов'язковий)
-        public Guid? UserId { get; set; } // Foreign Key до AspNetUsers
-        public User? User { get; set; } // Навігаційна властивість
+        [ForeignKey("UserId")]
+        public User User { get; set; } = null!;
 
-        // Зв'язок один-до-багатьох з Order (один водій може виконувати багато замовлень)
         public ICollection<Order> Orders { get; set; } = new List<Order>();
     }
 }

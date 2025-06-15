@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// Program.cs
+
+using Microsoft.EntityFrameworkCore;
 using TransportLogistics.Api.Data;
 using TransportLogistics.Api.Data.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -7,9 +9,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System; // Додано для TimeSpan
 using System.Collections.Generic;
-using TransportLogistics.Api.Contracts; // Для IJwtTokenService
-using TransportLogistics.Api.Services;   // Для JwtTokenService
-using TransportLogistics.Api.Repositories; // Для DriverRepository
+using TransportLogistics.Api.Contracts; // Для IJwtTokenService, IOrderRepository, IOrderService, IGenericRepository
+using TransportLogistics.Api.Services;   // Для JwtTokenService, OrderService
+using TransportLogistics.Api.Repositories; // Для DriverRepository, OrderRepository, GenericRepository
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,16 +72,37 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
         options.User.RequireUniqueEmail = true; // Вимагаємо унікальну пошту
     })
     .AddEntityFrameworkStores<ApplicationDbContext>() // Вказуємо, що Identity буде використовувати EF Core
-    
     .AddDefaultTokenProviders(); // Додаємо провайдерів токенів для скидання пароля тощо
+
 // Реєстрація нашого JWT сервісу
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
-// Реєстрація репозиторію для Driver
+// =======================================================================================
+// >>>>> ПОЧАТОК РЕЄСТРАЦІЙ РЕПОЗИТОРІЇВ ТА СЕРВІСІВ <<<<<
+
+// Реєстрація репозиторіїв
+// ЗВЕРНІТЬ УВАГУ: Додано "Guid" як другий тип аргументу для IGenericRepository та GenericRepository
+builder.Services.AddScoped<IGenericRepository<Driver, Guid>, GenericRepository<Driver, Guid>>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 
-// Реєстрація сервісу для Driver
+// Реєстрація репозиторіїв для Order
+// ЗВЕРНІТЬ УВАГУ: Додано "Guid" як другий тип аргументу для IGenericRepository та GenericRepository
+builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>();
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+
+// !!! ДОДАНО: Реєстрація GenericRepository для Vehicle !!!
+builder.Services.AddScoped<IGenericRepository<Vehicle, Guid>, GenericRepository<Vehicle, Guid>>();
+
+
+// Реєстрація сервісів
 builder.Services.AddScoped<IDriverService, DriverService>();
+
+// Реєстрація сервісу для Order
+builder.Services.AddScoped<IOrderService, OrderService>();
+
+// >>>>> КІНЕЦЬ РЕЄСТРАЦІЙ <<<<<
+// =======================================================================================
+
 
 // === Додаємо налаштування JWT Authentication ===
 var jwtSettings = builder.Configuration.GetSection("Jwt");
