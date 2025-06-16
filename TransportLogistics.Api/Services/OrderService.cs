@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.Data.Entities;
 using TransportLogistics.Api.DTOs;
+using TransportLogistics.Api.DTOs.QueryParams; // Додано для OrderQueryParams
+using Microsoft.EntityFrameworkCore; // Додано для IQueryable розширень
 
 namespace TransportLogistics.Api.Services
 {
@@ -22,10 +24,96 @@ namespace TransportLogistics.Api.Services
             _vehicleRepository = vehicleRepository;
         }
 
-        public async Task<List<OrderResponse>> GetAllOrdersAsync()
+        // Оновлено метод для прийому OrderQueryParams
+        public async Task<List<OrderResponse>> GetAllOrdersAsync(OrderQueryParams queryParams)
         {
-            var orders = await _orderRepository.GetAllAsync();
-            return orders.Select(o => MapToOrderResponse(o)).ToList();
+            // Отримуємо всі замовлення з включеними пов'язаними сутностями
+            var ordersQuery = (await _orderRepository.GetAllAsync()).AsQueryable();
+
+            // === Фільтрування ===
+            if (!string.IsNullOrWhiteSpace(queryParams.OriginAddress))
+            {
+                ordersQuery = ordersQuery.Where(o => o.OriginAddress.Contains(queryParams.OriginAddress));
+            }
+            if (!string.IsNullOrWhiteSpace(queryParams.DestinationAddress))
+            {
+                ordersQuery = ordersQuery.Where(o => o.DestinationAddress.Contains(queryParams.DestinationAddress));
+            }
+            if (queryParams.Status.HasValue)
+            {
+                ordersQuery = ordersQuery.Where(o => o.Status == queryParams.Status.Value);
+            }
+            if (queryParams.CreationDateFrom.HasValue)
+            {
+                ordersQuery = ordersQuery.Where(o => o.CreationDate >= queryParams.CreationDateFrom.Value);
+            }
+            if (queryParams.CreationDateTo.HasValue)
+            {
+                ordersQuery = ordersQuery.Where(o => o.CreationDate <= queryParams.CreationDateTo.Value);
+            }
+            if (queryParams.MinPrice.HasValue)
+            {
+                ordersQuery = ordersQuery.Where(o => o.Price >= queryParams.MinPrice.Value);
+            }
+            if (queryParams.MaxPrice.HasValue)
+            {
+                ordersQuery = ordersQuery.Where(o => o.Price <= queryParams.MaxPrice.Value);
+            }
+
+            // === Сортування ===
+            if (!string.IsNullOrWhiteSpace(queryParams.SortBy))
+            {
+                switch (queryParams.SortBy.ToLowerInvariant())
+                {
+                    case "creationdate":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.CreationDate) :
+                            ordersQuery.OrderBy(o => o.CreationDate);
+                        break;
+                    case "scheduledpickupdate":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.ScheduledPickupDate) :
+                            ordersQuery.OrderBy(o => o.ScheduledPickupDate);
+                        break;
+                    case "price":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.Price) :
+                            ordersQuery.OrderBy(o => o.Price);
+                        break;
+                    case "status":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.Status) :
+                            ordersQuery.OrderBy(o => o.Status);
+                        break;
+                    case "originaddress":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.OriginAddress) :
+                            ordersQuery.OrderBy(o => o.OriginAddress);
+                        break;
+                    case "destinationaddress":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.DestinationAddress) :
+                            ordersQuery.OrderBy(o => o.DestinationAddress);
+                        break;
+                    default:
+                        // За замовчуванням сортуємо за CreationDate, якщо поле невідоме
+                        ordersQuery = ordersQuery.OrderBy(o => o.CreationDate);
+                        break;
+                }
+            }
+            else
+            {
+                // За замовчуванням сортуємо за Id, якщо SortBy не вказано
+                ordersQuery = ordersQuery.OrderBy(o => o.Id);
+            }
+
+            // === Пагінація ===
+            var pagedOrders = ordersQuery
+                .Skip(queryParams.Skip)
+                .Take(queryParams.PageSize)
+                .ToList(); // Виконуємо запит до БД
+
+            return pagedOrders.Select(o => MapToOrderResponse(o)).ToList();
         }
 
         public async Task<OrderResponse?> GetOrderByIdAsync(Guid id)
@@ -40,7 +128,6 @@ namespace TransportLogistics.Api.Services
 
         public async Task<OrderResponse> CreateOrderAsync(CreateOrderRequest request)
         {
-            // Перевірка на існування водія та транспортного засобу, якщо ID надано
             if (request.DriverId.HasValue)
             {
                 var driverExists = await _driverRepository.GetByIdAsync(request.DriverId.Value);
@@ -66,7 +153,7 @@ namespace TransportLogistics.Api.Services
                 DestinationAddress = request.DestinationAddress,
                 ScheduledPickupDate = request.ScheduledPickupDate,
                 ScheduledDeliveryDate = request.ScheduledDeliveryDate,
-                Status = (OrderStatus)request.Status, // <-- Явне приведення int до enum
+                Status = (OrderStatus)request.Status,
                 TotalWeightKg = request.TotalWeightKg,
                 TotalVolumeM3 = request.TotalVolumeM3,
                 Price = request.Price,
@@ -74,7 +161,7 @@ namespace TransportLogistics.Api.Services
                 CreationDate = DateTime.UtcNow,
                 DriverId = request.DriverId,
                 VehicleId = request.VehicleId,
-                Cargos = request.Cargo.Select(c => new Cargo // Мапимо request.Cargo (з DTO) до order.Cargos (з сутності)
+                Cargos = request.Cargo.Select(c => new Cargo
                 {
                     Id = Guid.NewGuid(),
                     Name = c.Name,
@@ -98,7 +185,6 @@ namespace TransportLogistics.Api.Services
                 return null;
             }
 
-            // Перевірка на існування водія та транспортного засобу, якщо ID надано
             if (request.DriverId.HasValue)
             {
                 var driverExists = await _driverRepository.GetByIdAsync(request.DriverId.Value);
@@ -117,14 +203,13 @@ namespace TransportLogistics.Api.Services
                 }
             }
 
-            // Оновлюємо поля
             existingOrder.OriginAddress = request.OriginAddress;
             existingOrder.DestinationAddress = request.DestinationAddress;
             existingOrder.ScheduledPickupDate = request.ScheduledPickupDate;
             existingOrder.ActualPickupDate = request.ActualPickupDate;
             existingOrder.ScheduledDeliveryDate = request.ScheduledDeliveryDate;
             existingOrder.ActualDeliveryDate = request.ActualDeliveryDate;
-            existingOrder.Status = (OrderStatus)request.Status; // <-- Явне приведення int до enum
+            existingOrder.Status = (OrderStatus)request.Status;
             existingOrder.TotalWeightKg = request.TotalWeightKg;
             existingOrder.TotalVolumeM3 = request.TotalVolumeM3;
             existingOrder.Price = request.Price;
@@ -132,7 +217,6 @@ namespace TransportLogistics.Api.Services
             existingOrder.DriverId = request.DriverId;
             existingOrder.VehicleId = request.VehicleId;
 
-            // Оновлення Cargo - замінюємо колекцію
             existingOrder.Cargos.Clear();
             foreach (var cargoDto in request.Cargo)
             {
@@ -163,13 +247,10 @@ namespace TransportLogistics.Api.Services
             return true;
         }
 
-        // Перевірка на null для параметра 'order' тут не потрібна, якщо метод викликається з order!
-        // Якщо ж він може бути null, то сигнатура має бути 'Order? order'
         private OrderResponse MapToOrderResponse(Order order)
         {
-            // Якщо у методі GetOrderByIdAsync() та CreateOrderAsync() ви вже перевіряєте на null
-            // та передаєте сюди гарантовано не-null об'єкт, то 'if (order == null)' не потрібна.
-            // Приймаємо, що 'order' тут завжди не-null.
+            if (order == null) return null!; // Додано null! для відповідності сигнатурі
+
             return new OrderResponse
             {
                 Id = order.Id,
@@ -199,7 +280,7 @@ namespace TransportLogistics.Api.Services
                     Model = order.Vehicle.Model,
                     LicensePlate = order.Vehicle.LicensePlate
                 } : null,
-                Cargos = order.Cargos?.Select(c => new CargoInOrderDto // <-- Використовуємо order.Cargos (з сутності)
+                Cargos = order.Cargos?.Select(c => new CargoInOrderDto
                 {
                     Id = c.Id,
                     Name = c.Name,

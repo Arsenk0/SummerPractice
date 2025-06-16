@@ -2,18 +2,20 @@
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.Data.Entities;
 using TransportLogistics.Api.DTOs;
+using TransportLogistics.Api.DTOs.QueryParams; // Додано для DriverQueryParams
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity; // Для UserManager
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore; // Додано для IQueryable розширень
 
 namespace TransportLogistics.Api.Services
 {
     public class DriverService : IDriverService
     {
         private readonly IDriverRepository _driverRepository;
-        private readonly UserManager<User> _userManager; // Для доступу до User
+        private readonly UserManager<User> _userManager;
 
         public DriverService(IDriverRepository driverRepository, UserManager<User> userManager)
         {
@@ -21,12 +23,80 @@ namespace TransportLogistics.Api.Services
             _userManager = userManager;
         }
 
-        public async Task<List<DriverDto>> GetAllDriversAsync()
+        // Оновлено метод для прийому DriverQueryParams
+        public async Task<List<DriverDto>> GetAllDriversAsync(DriverQueryParams queryParams)
         {
-            var drivers = await _driverRepository.GetAllAsync();
-            var driverDtos = new List<DriverDto>();
+            // Отримуємо всі драйвери
+            var driversQuery = (await _driverRepository.GetAllAsync()).AsQueryable();
 
-            foreach (var driver in drivers)
+            // === Фільтрування ===
+            if (!string.IsNullOrWhiteSpace(queryParams.FirstName))
+            {
+                driversQuery = driversQuery.Where(d => d.FirstName.Contains(queryParams.FirstName));
+            }
+            if (!string.IsNullOrWhiteSpace(queryParams.LastName))
+            {
+                driversQuery = driversQuery.Where(d => d.LastName.Contains(queryParams.LastName));
+            }
+            if (!string.IsNullOrWhiteSpace(queryParams.LicenseNumber))
+            {
+                driversQuery = driversQuery.Where(d => d.LicenseNumber.Contains(queryParams.LicenseNumber));
+            }
+            if (queryParams.IsAvailable.HasValue)
+            {
+                driversQuery = driversQuery.Where(d => d.IsAvailable == queryParams.IsAvailable.Value);
+            }
+
+            // === Сортування ===
+            if (!string.IsNullOrWhiteSpace(queryParams.SortBy))
+            {
+                switch (queryParams.SortBy.ToLowerInvariant())
+                {
+                    case "firstname":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.FirstName) :
+                            driversQuery.OrderBy(d => d.FirstName);
+                        break;
+                    case "lastname":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.LastName) :
+                            driversQuery.OrderBy(d => d.LastName);
+                        break;
+                    case "licensenumber":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.LicenseNumber) :
+                            driversQuery.OrderBy(d => d.LicenseNumber);
+                        break;
+                    case "dateofbirth":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.DateOfBirth) :
+                            driversQuery.OrderBy(d => d.DateOfBirth);
+                        break;
+                    case "isavailable":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.IsAvailable) :
+                            driversQuery.OrderBy(d => d.IsAvailable);
+                        break;
+                    default:
+                        // За замовчуванням сортуємо за FirstName, якщо поле невідоме
+                        driversQuery = driversQuery.OrderBy(d => d.FirstName);
+                        break;
+                }
+            }
+            else
+            {
+                // За замовчуванням сортуємо за Id, якщо SortBy не вказано
+                driversQuery = driversQuery.OrderBy(d => d.Id);
+            }
+
+            // === Пагінація ===
+            var pagedDrivers = driversQuery
+                .Skip(queryParams.Skip)
+                .Take(queryParams.PageSize)
+                .ToList(); // Виконуємо запит до БД
+
+            var driverDtos = new List<DriverDto>();
+            foreach (var driver in pagedDrivers)
             {
                 var user = await _userManager.FindByIdAsync(driver.UserId.ToString());
                 driverDtos.Add(new DriverDto
@@ -38,8 +108,8 @@ namespace TransportLogistics.Api.Services
                     DateOfBirth = driver.DateOfBirth,
                     IsAvailable = driver.IsAvailable,
                     UserId = driver.UserId,
-                    UserName = user?.UserName, // ?. для безпечного доступу
-                    Email = user?.Email        // ?. для безпечного доступу
+                    UserName = user?.UserName,
+                    Email = user?.Email
                 });
             }
             return driverDtos;
@@ -70,14 +140,12 @@ namespace TransportLogistics.Api.Services
 
         public async Task<DriverDto> CreateDriverAsync(CreateDriverRequest request)
         {
-            // Перевіряємо, чи існує користувач з таким UserId
             var user = await _userManager.FindByIdAsync(request.UserId.ToString());
             if (user == null)
             {
                 throw new ArgumentException($"User with ID {request.UserId} not found.");
             }
 
-            // Перевіряємо, чи вже існує водій для цього користувача
             var existingDriver = (await _driverRepository.FindAsync(d => d.UserId == request.UserId)).FirstOrDefault();
             if (existingDriver != null)
             {
@@ -91,8 +159,8 @@ namespace TransportLogistics.Api.Services
                 LastName = request.LastName,
                 LicenseNumber = request.LicenseNumber,
                 DateOfBirth = request.DateOfBirth,
-                IsAvailable = true, // За замовчуванням доступний
-                UserId = request.UserId // Без ??, оскільки UserId вже Guid
+                IsAvailable = true,
+                UserId = request.UserId
             };
 
             await _driverRepository.AddAsync(driver);
@@ -121,10 +189,9 @@ namespace TransportLogistics.Api.Services
             var driverToUpdate = await _driverRepository.GetByIdAsync(id);
             if (driverToUpdate == null)
             {
-                return null; // Водія не знайдено
+                return null;
             }
 
-            // Перевіряємо, чи існує користувач з таким UserId, якщо він змінюється
             if (request.UserId != driverToUpdate.UserId)
             {
                 var newUser = await _userManager.FindByIdAsync(request.UserId.ToString());
@@ -132,22 +199,21 @@ namespace TransportLogistics.Api.Services
                 {
                     throw new ArgumentException($"New User with ID {request.UserId} not found.");
                 }
-                // Перевіряємо, чи вже є інший водій, призначений на нового користувача
                 var existingDriverForNewUser = (await _driverRepository.FindAsync(d => d.UserId == request.UserId && d.Id != id)).FirstOrDefault();
                 if (existingDriverForNewUser != null)
                 {
                     throw new ArgumentException($"Another driver already exists for New User ID {request.UserId}.");
                 }
             }
-            
+
             driverToUpdate.FirstName = request.FirstName;
             driverToUpdate.LastName = request.LastName;
             driverToUpdate.LicenseNumber = request.LicenseNumber;
             driverToUpdate.DateOfBirth = request.DateOfBirth;
             driverToUpdate.IsAvailable = request.IsAvailable;
-            driverToUpdate.UserId = request.UserId; // Без ??, оскільки UserId вже Guid
+            driverToUpdate.UserId = request.UserId;
 
-            await _driverRepository.UpdateAsync(driverToUpdate); // Використовуємо UpdateAsync
+            await _driverRepository.UpdateAsync(driverToUpdate);
 
             var user = await _userManager.FindByIdAsync(driverToUpdate.UserId.ToString());
             return new DriverDto
@@ -169,9 +235,9 @@ namespace TransportLogistics.Api.Services
             var driverToDelete = await _driverRepository.GetByIdAsync(id);
             if (driverToDelete == null)
             {
-                return false; // Водія не знайдено
+                return false;
             }
-            await _driverRepository.DeleteAsync(driverToDelete); // Використовуємо DeleteAsync
+            await _driverRepository.DeleteAsync(driverToDelete);
             return true;
         }
     }

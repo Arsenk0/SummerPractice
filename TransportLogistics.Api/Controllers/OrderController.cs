@@ -3,15 +3,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.DTOs;
+using TransportLogistics.Api.DTOs.QueryParams; // Додано для OrderQueryParams
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace TransportLogistics.Api.Controllers
 {
-    [ApiController]
+    [Authorize] // Додано авторизацію для всього контролера
     [Route("api/[controller]")]
-    [Authorize]
+    [ApiController]
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
@@ -21,18 +22,19 @@ namespace TransportLogistics.Api.Controllers
             _orderService = orderService;
         }
 
+        // Оновлено метод для прийому OrderQueryParams
         [HttpGet]
         [ProducesResponseType(typeof(List<OrderResponse>), 200)]
-        public async Task<ActionResult<List<OrderResponse>>> GetAllOrders()
+        public async Task<IActionResult> GetAllOrders([FromQuery] OrderQueryParams queryParams)
         {
-            var orders = await _orderService.GetAllOrdersAsync();
+            var orders = await _orderService.GetAllOrdersAsync(queryParams);
             return Ok(orders);
         }
 
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(OrderResponse), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<OrderResponse>> GetOrderById(Guid id)
+        public async Task<IActionResult> GetOrderById(Guid id)
         {
             var order = await _orderService.GetOrderByIdAsync(id);
             if (order == null)
@@ -45,16 +47,12 @@ namespace TransportLogistics.Api.Controllers
         [HttpPost]
         [ProducesResponseType(typeof(OrderResponse), 201)]
         [ProducesResponseType(400)]
-        public async Task<ActionResult<OrderResponse>> CreateOrder([FromBody] CreateOrderRequest request)
+        public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
                 var newOrder = await _orderService.CreateOrderAsync(request);
+                // Повертаємо 201 Created та посилання на створений ресурс
                 return CreatedAtAction(nameof(GetOrderById), new { id = newOrder.Id }, newOrder);
             }
             catch (ArgumentException ex)
@@ -67,13 +65,8 @@ namespace TransportLogistics.Api.Controllers
         [ProducesResponseType(typeof(OrderResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<OrderResponse>> UpdateOrder(Guid id, [FromBody] UpdateOrderRequest request)
+        public async Task<IActionResult> UpdateOrder(Guid id, [FromBody] UpdateOrderRequest request)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
                 var updatedOrder = await _orderService.UpdateOrderAsync(id, request);
@@ -92,14 +85,14 @@ namespace TransportLogistics.Api.Controllers
         [HttpDelete("{id}")]
         [ProducesResponseType(204)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult> DeleteOrder(Guid id)
+        public async Task<IActionResult> DeleteOrder(Guid id)
         {
             var deleted = await _orderService.DeleteOrderAsync(id);
             if (!deleted)
             {
                 return NotFound($"Order with ID {id} not found.");
             }
-            return NoContent();
+            return NoContent(); // 204 No Content for successful deletion
         }
     }
 }

@@ -3,15 +3,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.DTOs;
+using TransportLogistics.Api.DTOs.QueryParams; // Додано для DriverQueryParams
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace TransportLogistics.Api.Controllers
 {
-    [ApiController]
+    [Authorize] // Додано авторизацію для всього контролера
     [Route("api/[controller]")]
-    [Authorize] // Застосовуємо авторизацію до всього контролера
+    [ApiController]
     public class DriverController : ControllerBase
     {
         private readonly IDriverService _driverService;
@@ -21,20 +22,19 @@ namespace TransportLogistics.Api.Controllers
             _driverService = driverService;
         }
 
-        // GET: api/Driver
+        // Оновлено метод для прийому DriverQueryParams
         [HttpGet]
         [ProducesResponseType(typeof(List<DriverDto>), 200)]
-        public async Task<ActionResult<List<DriverDto>>> GetAllDrivers()
+        public async Task<IActionResult> GetAllDrivers([FromQuery] DriverQueryParams queryParams)
         {
-            var drivers = await _driverService.GetAllDriversAsync();
+            var drivers = await _driverService.GetAllDriversAsync(queryParams);
             return Ok(drivers);
         }
 
-        // GET: api/Driver/{id}
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(DriverDto), 200)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<DriverDto>> GetDriverById(Guid id)
+        public async Task<IActionResult> GetDriverById(Guid id)
         {
             var driver = await _driverService.GetDriverByIdAsync(id);
             if (driver == null)
@@ -44,17 +44,11 @@ namespace TransportLogistics.Api.Controllers
             return Ok(driver);
         }
 
-        // POST: api/Driver
         [HttpPost]
         [ProducesResponseType(typeof(DriverDto), 201)]
         [ProducesResponseType(400)]
-        public async Task<ActionResult<DriverDto>> CreateDriver([FromBody] CreateDriverRequest request)
+        public async Task<IActionResult> CreateDriver([FromBody] CreateDriverRequest request)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
                 var newDriver = await _driverService.CreateDriverAsync(request);
@@ -66,21 +60,14 @@ namespace TransportLogistics.Api.Controllers
             }
         }
 
-        // PUT: api/Driver/{id}
         [HttpPut("{id}")]
         [ProducesResponseType(typeof(DriverDto), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult<DriverDto>> UpdateDriver(Guid id, [FromBody] UpdateDriverRequest request)
+        public async Task<IActionResult> UpdateDriver(Guid id, [FromBody] UpdateDriverRequest request)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             try
             {
-                // ПОМИЛКА БУЛА ТУТ - ТРЕБА ПЕРЕДАТИ ОБ'ЄКТ request
                 var updatedDriver = await _driverService.UpdateDriverAsync(id, request);
                 if (updatedDriver == null)
                 {
@@ -94,11 +81,10 @@ namespace TransportLogistics.Api.Controllers
             }
         }
 
-        // DELETE: api/Driver/{id}
         [HttpDelete("{id}")]
         [ProducesResponseType(204)]
         [ProducesResponseType(404)]
-        public async Task<ActionResult> DeleteDriver(Guid id)
+        public async Task<IActionResult> DeleteDriver(Guid id)
         {
             var deleted = await _driverService.DeleteDriverAsync(id);
             if (!deleted)
