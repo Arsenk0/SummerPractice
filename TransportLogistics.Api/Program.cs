@@ -9,47 +9,58 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System; // Додано для TimeSpan
 using System.Collections.Generic;
-using TransportLogistics.Api.Contracts; // Для IJwtTokenService, IOrderRepository, IOrderService, IGenericRepository
-using TransportLogistics.Api.Services;   // Для JwtTokenService, OrderService
+using TransportLogistics.Api.Contracts; // Для IJwtTokenService, IOrderRepository, IOrderService, IGenericRepository, IAuthService
+using TransportLogistics.Api.Services;   // Для JwtTokenService, OrderService, AuthService
 using TransportLogistics.Api.Repositories; // Для DriverRepository, OrderRepository, GenericRepository
+using FluentValidation; // Додано для Fluent Validation
+using FluentValidation.AspNetCore; // Додано для Fluent Validation ASP.NET Core інтеграції
+using TransportLogistics.Api.Validators; // Додано для ваших валідаторів
+using Microsoft.OpenApi.Models; // Додано для OpenApiInfo, OpenApiSecurityScheme, ParameterLocation, SecuritySchemeType, OpenApiReference, ReferenceType
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Додаємо послуги до контейнера.
 
 builder.Services.AddControllers();
+
+// === Додаємо Fluent Validation ===
+builder.Services.AddFluentValidationAutoValidation(); // Автоматична валідація
+builder.Services.AddFluentValidationClientsideAdapters(); // Для клієнтської валідації (якщо використовується)
+// Реєструємо всі валідатори з поточної збірки, де знаходяться ваші валідатори
+builder.Services.AddValidatorsFromAssemblyContaining<CreateDriverRequestValidator>();
+
 // Додаємо Swagger/OpenAPI для документування API
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "TransportLogistics.Api", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "TransportLogistics.Api", Version = "v1" });
 
     // Визначаємо схему безпеки для JWT (Bearer Token)
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = @"JWT Authorization header using the Bearer scheme.
                       Enter 'Bearer' [space] and then your token in the text input below.
                       Example: 'Bearer 12345abcdef'",
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
 
     // Додаємо вимоги безпеки для всіх операцій
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement()
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement()
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            new OpenApiSecurityScheme
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Reference = new OpenApiReference
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 },
                 Scheme = "oauth2",
                 Name = "Bearer",
-                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                In = ParameterLocation.Header,
             },
             new List<string>()
         }
@@ -76,29 +87,25 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
 
 // Реєстрація нашого JWT сервісу
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>(); // Переконайтеся, що IAuthService та AuthService зареєстровані
 
 // =======================================================================================
 // >>>>> ПОЧАТОК РЕЄСТРАЦІЙ РЕПОЗИТОРІЇВ ТА СЕРВІСІВ <<<<<
 
 // Реєстрація репозиторіїв
-// ЗВЕРНІТЬ УВАГУ: Додано "Guid" як другий тип аргументу для IGenericRepository та GenericRepository
-builder.Services.AddScoped<IGenericRepository<Driver, Guid>, GenericRepository<Driver, Guid>>();
+builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>)); // Додано для загального репозиторію
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 
-// Реєстрація репозиторіїв для Order
-// ЗВЕРНІТЬ УВАГУ: Додано "Guid" як другий тип аргументу для IGenericRepository та GenericRepository
-builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>();
+builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>(); // Це вже було
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
-// !!! ДОДАНО: Реєстрація GenericRepository для Vehicle !!!
 builder.Services.AddScoped<IGenericRepository<Vehicle, Guid>, GenericRepository<Vehicle, Guid>>();
 
 
 // Реєстрація сервісів
 builder.Services.AddScoped<IDriverService, DriverService>();
-
-// Реєстрація сервісу для Order
 builder.Services.AddScoped<IOrderService, OrderService>();
+// builder.Services.AddScoped<IVehicleService, VehicleService>(); // Додайте, якщо такий сервіс існує
 
 // >>>>> КІНЕЦЬ РЕЄСТРАЦІЙ <<<<<
 // =======================================================================================
@@ -141,12 +148,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// app.UseHttpsRedirection(); // Ми вимкнули HTTPS для простоти, але якщо ввімкнете, то це потрібно
+//app.UseHttpsRedirection(); // Залишимо, якщо плануєте використовувати HTTPS
 
-app.UseRouting(); // Цей рядок завжди має бути перед UseAuthentication та UseAuthorization
+app.UseRouting();
 
-app.UseAuthentication(); // !!! ВАЖЛИВО: цей рядок має бути перед UseAuthorization !!!
-app.UseAuthorization();  // Дозволяємо використання авторизації
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

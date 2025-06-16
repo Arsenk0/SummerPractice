@@ -1,5 +1,5 @@
 // TransportLogistics.Api/DTOs/UpdateOrderRequest.cs
-using TransportLogistics.Api.Data.Entities; // Для OrderStatus
+using TransportLogistics.Api.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -9,7 +9,7 @@ namespace TransportLogistics.Api.DTOs
     public class UpdateOrderRequest
     {
         [Required]
-        public Guid Id { get; set; } // ID замовлення, яке оновлюється
+        public Guid Id { get; set; }
 
         [Required]
         [MaxLength(250)]
@@ -22,14 +22,14 @@ namespace TransportLogistics.Api.DTOs
         [Required]
         public DateTime ScheduledPickupDate { get; set; }
 
-        public DateTime? ActualPickupDate { get; set; } // Nullable
+        public DateTime? ActualPickupDate { get; set; }
 
         public DateTime? ScheduledDeliveryDate { get; set; }
 
-        public DateTime? ActualDeliveryDate { get; set; } // Nullable
+        public DateTime? ActualDeliveryDate { get; set; }
 
         [Required]
-        public int Status { get; set; } // <-- int для вхідних даних DTO
+        public int Status { get; set; }
 
         [Range(0.01, double.MaxValue)]
         public double TotalWeightKg { get; set; }
@@ -46,9 +46,8 @@ namespace TransportLogistics.Api.DTOs
         public Guid? DriverId { get; set; }
         public Guid? VehicleId { get; set; }
 
-        // Список вантажів для оновлення
-        public List<CargoRequestDto> Cargo { get; set; } = new List<CargoRequestDto>(); // <-- Назва Cargo (однина) для DTO
+        // Тепер посилаємося на CargoRequestDto, який є в окремому файлі
+        public List<CargoRequestDto> Cargo { get; set; } = new List<CargoRequestDto>();
     }
-    // Клас CargoRequestDto може бути тут або винесений в окремий файл, якщо він використовується в багатьох DTO.
-    // Якщо ви вже створили окремий файл CargoRequestDto.cs, то цей вкладений клас тут не потрібен.
+    // ВИДАЛІТЬ ВСЕ, ЩО БУЛО ТУТ ВНУТРІ КЛАСУ CargoRequestDto
 }
