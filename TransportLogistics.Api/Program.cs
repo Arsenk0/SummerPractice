@@ -7,15 +7,21 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using System; // Додано для TimeSpan
+using System;
 using System.Collections.Generic;
-using TransportLogistics.Api.Contracts; // Для IJwtTokenService, IOrderRepository, IOrderService, IGenericRepository, IAuthService
-using TransportLogistics.Api.Services;   // Для JwtTokenService, OrderService, AuthService
-using TransportLogistics.Api.Repositories; // Для DriverRepository, OrderRepository, GenericRepository
-using FluentValidation; // Додано для Fluent Validation
-using FluentValidation.AspNetCore; // Додано для Fluent Validation ASP.NET Core інтеграції
-using TransportLogistics.Api.Validators; // Додано для ваших валідаторів
-using Microsoft.OpenApi.Models; // Додано для OpenApiInfo, OpenApiSecurityScheme, ParameterLocation, SecuritySchemeType, OpenApiReference, ReferenceType
+using TransportLogistics.Api.Contracts;
+using TransportLogistics.Api.Services;
+using TransportLogistics.Api.Repositories;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using TransportLogistics.Api.Validators;
+using Microsoft.OpenApi.Models;
+using TransportLogistics.Api.Middleware; // Додано для ExceptionHandlingMiddleware
+using Microsoft.AspNetCore.Mvc; // Додано для ApiBehaviorOptions
+using FluentValidation.Results; // Додано для FluentValidation.Results.ValidationFailure
+using System.Linq; // Явно додано System.Linq для вирішення проблем з Select/SelectMany
+using TransportLogistics.Api.Exceptions; // Додано для вашого ValidationException
+using TransportLogistics.Api.DataSeeder; // !!! ДОДАНО для сідінгу !!!
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +34,22 @@ builder.Services.AddFluentValidationAutoValidation(); // Автоматична 
 builder.Services.AddFluentValidationClientsideAdapters(); // Для клієнтської валідації (якщо використовується)
 // Реєструємо всі валідатори з поточної збірки, де знаходяться ваші валідатори
 builder.Services.AddValidatorsFromAssemblyContaining<CreateDriverRequestValidator>();
+
+// Налаштовуємо, щоб FluentValidation кидав виняток при валідації
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        // Правильна логіка для перетворення ModelState на список FluentValidation.Results.ValidationFailure
+        var failures = context.ModelState
+            .Where(e => e.Value != null && e.Value.Errors.Any()) // Перевіряємо, що є помилки
+            .SelectMany(e => e.Value.Errors.Select(error => new FluentValidation.Results.ValidationFailure(e.Key, error.ErrorMessage)))
+            .ToList();
+
+        throw new TransportLogistics.Api.Exceptions.ValidationException(failures);
+    };
+});
+
 
 // Додаємо Swagger/OpenAPI для документування API
 builder.Services.AddEndpointsApiExplorer();
@@ -57,10 +79,7 @@ builder.Services.AddSwaggerGen(c =>
                 {
                     Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
-                },
-                Scheme = "oauth2",
-                Name = "Bearer",
-                In = ParameterLocation.Header,
+                }
             },
             new List<string>()
         }
@@ -87,16 +106,16 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
 
 // Реєстрація нашого JWT сервісу
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-builder.Services.AddScoped<IAuthService, AuthService>(); // Переконайтеся, що IAuthService та AuthService зареєстровані
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // =======================================================================================
 // >>>>> ПОЧАТОК РЕЄСТРАЦІЙ РЕПОЗИТОРІЇВ ТА СЕРВІСІВ <<<<<
 
 // Реєстрація репозиторіїв
-builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>)); // Додано для загального репозиторію
+builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 
-builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>(); // Це вже було
+builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
 builder.Services.AddScoped<IGenericRepository<Vehicle, Guid>, GenericRepository<Vehicle, Guid>>();
@@ -105,7 +124,6 @@ builder.Services.AddScoped<IGenericRepository<Vehicle, Guid>, GenericRepository<
 // Реєстрація сервісів
 builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
-// builder.Services.AddScoped<IVehicleService, VehicleService>(); // Додайте, якщо такий сервіс існує
 
 // >>>>> КІНЕЦЬ РЕЄСТРАЦІЙ <<<<<
 // =======================================================================================
@@ -113,7 +131,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 // === Додаємо налаштування JWT Authentication ===
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!); // Отримання секретного ключа з appsettings.json
+var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -122,18 +140,18 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // У продакшені має бути true (для HTTPS)
+    options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = true, // Валідувати емітента
-        ValidIssuer = jwtSettings["Issuer"], // Емітент з appsettings.json
-        ValidateAudience = true, // Валідувати аудиторію
-        ValidAudience = jwtSettings["Audience"], // Аудиторія з appsettings.json
-        ValidateLifetime = true, // Валідувати термін дії токену
-        ClockSkew = TimeSpan.Zero // Відключити похибку годинника (токен має бути дійсним рівно до вказаного часу)
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidateAudience = true,
+        ValidAudience = jwtSettings["Audience"],
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
     };
 });
 
@@ -142,13 +160,17 @@ builder.Services.AddAuthentication(options =>
 var app = builder.Build();
 
 // Конфігуруємо HTTP-пайплайн запитів.
+
+// Додаємо Middleware для обробки винятків на самому початку
+app.UseExceptionHandlingMiddleware();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection(); // Залишимо, якщо плануєте використовувати HTTPS
+// app.UseHttpsRedirection();
 
 app.UseRouting();
 
@@ -156,5 +178,34 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// === Додаємо логіку сідінгу бази даних ===
+// Цей блок виконується після побудови app, але до його запуску.
+// Використовуємо using-блок для створення Scope, щоб правильно отримати сервіси.
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        var userManager = services.GetRequiredService<UserManager<User>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+        // Застосовуємо міграції, якщо є
+        context.Database.Migrate();
+
+        // Сідінг базових ролей та адміністратора
+        await ApplicationDbContextSeed.SeedEssentialsAsync(userManager, roleManager);
+
+        // Сідінг прикладних даних
+        await ApplicationDbContextSeed.SeedSampleDataAsync(context, userManager);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while seeding the database.");
+    }
+}
+// === Кінець логіки сідінгу ===
 
 app.Run();
