@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TransportLogistics.Api.Data;
-using TransportLogistics.Api.Data.Entities; // Обов'язково для доступу до сутностей та перелічень
+using TransportLogistics.Api.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +13,6 @@ namespace TransportLogistics.Api.DataSeeder
     {
         public static async Task SeedEssentialsAsync(UserManager<User> userManager, RoleManager<IdentityRole<Guid>> roleManager)
         {
-            // Створення ролей, якщо вони не існують
             if (!await roleManager.RoleExistsAsync("Admin"))
             {
                 await roleManager.CreateAsync(new IdentityRole<Guid>("Admin"));
@@ -27,7 +26,6 @@ namespace TransportLogistics.Api.DataSeeder
                 await roleManager.CreateAsync(new IdentityRole<Guid>("Driver"));
             }
 
-            // Створення адміністратора, якщо його немає
             var adminUser = new User
             {
                 UserName = "admin@example.com",
@@ -41,7 +39,7 @@ namespace TransportLogistics.Api.DataSeeder
 
             if (userManager.Users.All(u => u.UserName != adminUser.UserName))
             {
-                var result = await userManager.CreateAsync(adminUser, "AdminPassword123!"); // Встановіть надійний пароль
+                var result = await userManager.CreateAsync(adminUser, "AdminPassword123!");
                 if (result.Succeeded)
                 {
                     await userManager.AddToRoleAsync(adminUser, "Admin");
@@ -55,11 +53,10 @@ namespace TransportLogistics.Api.DataSeeder
 
         public static async Task SeedSampleDataAsync(ApplicationDbContext context, UserManager<User> userManager)
         {
-            // Перевіряємо, чи база даних вже заповнена (наприклад, чи є водії або замовлення)
             if (await context.Drivers.AnyAsync() || await context.Orders.AnyAsync() || await context.Vehicles.AnyAsync())
             {
                 Console.WriteLine("Database already contains sample data. Skipping seeding.");
-                return; // База даних вже містить дані, сідінг не потрібен
+                return;
             }
 
             var adminUser = await userManager.FindByNameAsync("admin@example.com");
@@ -69,7 +66,6 @@ namespace TransportLogistics.Api.DataSeeder
                 return;
             }
 
-            // Додаємо кілька транспортних засобів
             var vehicles = new List<Vehicle>
             {
                 new Vehicle
@@ -79,8 +75,8 @@ namespace TransportLogistics.Api.DataSeeder
                     Model = "Sprinter",
                     Year = 2020,
                     LicensePlate = "AA1234BC",
-                    MaxWeightCapacityKg = 1500.0, // Змінено з Capacity
-                    MaxVolumeCapacityM3 = 15.0,  // Додано
+                    MaxWeightCapacityKg = 1500.0,
+                    MaxVolumeCapacityM3 = 15.0,
                     Type = VehicleType.Van,
                     IsAvailable = true
                 },
@@ -91,8 +87,8 @@ namespace TransportLogistics.Api.DataSeeder
                     Model = "FH16",
                     Year = 2018,
                     LicensePlate = "BB5678DE",
-                    MaxWeightCapacityKg = 20000.0, // Змінено з Capacity
-                    MaxVolumeCapacityM3 = 80.0,  // Додано
+                    MaxWeightCapacityKg = 20000.0,
+                    MaxVolumeCapacityM3 = 80.0,
                     Type = VehicleType.Truck,
                     IsAvailable = true
                 },
@@ -103,16 +99,15 @@ namespace TransportLogistics.Api.DataSeeder
                     Model = "Transit",
                     Year = 2022,
                     LicensePlate = "CC9012FG",
-                    MaxWeightCapacityKg = 1200.0, // Змінено з Capacity
-                    MaxVolumeCapacityM3 = 12.0,  // Додано
+                    MaxWeightCapacityKg = 1200.0,
+                    MaxVolumeCapacityM3 = 12.0,
                     Type = VehicleType.Van,
                     IsAvailable = true
                 }
             };
             await context.Vehicles.AddRangeAsync(vehicles);
-            await context.SaveChangesAsync(); // Зберігаємо транспортні засоби, щоб мати їхні ID
+            await context.SaveChangesAsync();
 
-            // Створення користувача для driver2
             var driver2User = new User
             {
                 UserName = "driver2@example.com",
@@ -123,7 +118,6 @@ namespace TransportLogistics.Api.DataSeeder
                 RefreshToken = Guid.NewGuid().ToString(),
                 RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7)
             };
-            // Перевіряємо, чи існує driver2User перед спробою створити
             if (userManager.Users.All(u => u.UserName != driver2User.UserName))
             {
                 var result = await userManager.CreateAsync(driver2User, "DriverPassword123!");
@@ -134,7 +128,7 @@ namespace TransportLogistics.Api.DataSeeder
                 else
                 {
                     Console.WriteLine($"Failed to create driver2 user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-                    driver2User = null; // Позначаємо, що користувач не був створений/знайдений
+                    driver2User = null;
                 }
             }
             else
@@ -142,7 +136,6 @@ namespace TransportLogistics.Api.DataSeeder
                 driver2User = await userManager.FindByNameAsync(driver2User.UserName);
             }
 
-            // Додаємо кілька водіїв
             var driver1 = new Driver
             {
                 Id = Guid.NewGuid(),
@@ -150,7 +143,7 @@ namespace TransportLogistics.Api.DataSeeder
                 LastName = "Петров",
                 LicenseNumber = "DRV001",
                 DateOfBirth = new DateTime(1985, 5, 10, 0, 0, 0, DateTimeKind.Utc),
-                UserId = adminUser.Id, // Асоціюємо водія з адміністратором
+                UserId = adminUser.Id,
                 IsAvailable = true
             };
 
@@ -161,25 +154,24 @@ namespace TransportLogistics.Api.DataSeeder
                 LastName = "Сидоренко",
                 LicenseNumber = "DRV002",
                 DateOfBirth = new DateTime(1992, 11, 20, 0, 0, 0, DateTimeKind.Utc),
-                UserId = driver2User?.Id ?? Guid.Empty, // Використовуємо ID створеного/знайденого користувача для driver2
+                UserId = driver2User?.Id ?? Guid.Empty,
                 IsAvailable = true
             };
             await context.Drivers.AddRangeAsync(driver1, driver2);
-            await context.SaveChangesAsync(); // Зберігаємо водіїв, щоб мати їхні ID
+            await context.SaveChangesAsync();
 
-            // Додаємо кілька замовлень
             var order1 = new Order
             {
                 Id = Guid.NewGuid(),
-                OriginAddress = "Чернівці, вул. Головна, 1", // Змінено з Origin
-                DestinationAddress = "Київ, просп. Перемоги, 10", // Змінено з Destination
-                CreationDate = DateTime.UtcNow, // Додано
-                ScheduledPickupDate = DateTime.UtcNow.AddDays(1), // Додано
-                TotalWeightKg = 500.0, // Змінено з CargoWeight
-                TotalVolumeM3 = 3.0, // Додано
-                Price = 2500.00m, // Додано
-                Status = OrderStatus.Pending, // Використовуємо існуючий статус
-                ScheduledDeliveryDate = DateTime.UtcNow.AddDays(3), // Змінено з EstimatedDeliveryDate
+                OriginAddress = "Чернівці, вул. Головна, 1",
+                DestinationAddress = "Київ, просп. Перемоги, 10",
+                CreationDate = DateTime.UtcNow,
+                ScheduledPickupDate = DateTime.UtcNow.AddDays(1),
+                TotalWeightKg = 500.0,
+                TotalVolumeM3 = 3.0,
+                Price = 2500.00m,
+                Status = OrderStatus.Pending,
+                ScheduledDeliveryDate = DateTime.UtcNow.AddDays(3),
                 Notes = "Термінова доставка",
                 DriverId = driver1.Id,
                 VehicleId = vehicles[0].Id
@@ -188,24 +180,24 @@ namespace TransportLogistics.Api.DataSeeder
             var order2 = new Order
             {
                 Id = Guid.NewGuid(),
-                OriginAddress = "Львів, пл. Ринок, 1", // Змінено з Origin
-                DestinationAddress = "Одеса, вул. Дерибасівська, 5", // Змінено з Destination
-                CreationDate = DateTime.UtcNow, // Додано
-                ScheduledPickupDate = DateTime.UtcNow.AddDays(2), // Додано
-                TotalWeightKg = 15000.0, // Змінено з CargoWeight
-                TotalVolumeM3 = 50.0, // Додано
-                Price = 15000.00m, // Додано
-                Status = OrderStatus.InTransit, // Змінено з InProgress
-                ScheduledDeliveryDate = DateTime.UtcNow.AddDays(7), // Змінено з EstimatedDeliveryDate
+                OriginAddress = "Львів, пл. Ринок, 1",
+                DestinationAddress = "Одеса, вул. Дерибасівська, 5",
+                CreationDate = DateTime.UtcNow,
+                ScheduledPickupDate = DateTime.UtcNow.AddDays(2),
+                TotalWeightKg = 15000.0,
+                TotalVolumeM3 = 50.0,
+                Price = 15000.00m,
+                Status = OrderStatus.InTransit,
+                ScheduledDeliveryDate = DateTime.UtcNow.AddDays(7),
                 Notes = "Збірний вантаж",
                 DriverId = driver2.Id,
                 VehicleId = vehicles[1].Id
             };
             await context.Orders.AddRangeAsync(order1, order2);
 
-            // Додаємо вантажі для замовлень
             var cargo1_order1 = new Cargo
             {
+                Id = Guid.NewGuid(),
                 Name = "Електроніка",
                 WeightKg = 200,
                 VolumeM3 = 1.5,
@@ -214,6 +206,7 @@ namespace TransportLogistics.Api.DataSeeder
             };
             var cargo2_order1 = new Cargo
             {
+                Id = Guid.NewGuid(),
                 Name = "Запчастини",
                 WeightKg = 300,
                 VolumeM3 = 1.5,
@@ -222,6 +215,7 @@ namespace TransportLogistics.Api.DataSeeder
             };
             var cargo1_order2 = new Cargo
             {
+                Id = Guid.NewGuid(),
                 Name = "Будматеріали",
                 WeightKg = 10000,
                 VolumeM3 = 30,
@@ -230,7 +224,7 @@ namespace TransportLogistics.Api.DataSeeder
             };
             await context.Cargos.AddRangeAsync(cargo1_order1, cargo2_order1, cargo1_order2);
 
-            await context.SaveChangesAsync(); // Зберігаємо всі зміни в базі даних
+            await context.SaveChangesAsync();
         }
     }
 }

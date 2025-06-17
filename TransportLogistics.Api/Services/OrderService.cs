@@ -1,34 +1,33 @@
-// TransportLogistics.Api/Services/OrderService.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.Data.Entities;
-using TransportLogistics.Api.DTOs;
-using TransportLogistics.Api.DTOs.QueryParams; // Додано для OrderQueryParams
-using Microsoft.EntityFrameworkCore; // Додано для IQueryable розширень
+using TransportLogistics.Api.DTOs; // Базовий неймспейс для DTO
+using TransportLogistics.Api.DTOs.QueryParams;
+using TransportLogistics.Api.Exceptions;
+using TransportLogistics.Api.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
+using AutoMapper;
 
 namespace TransportLogistics.Api.Services
 {
     public class OrderService : IOrderService
     {
-        private readonly IOrderRepository _orderRepository;
-        private readonly IDriverRepository _driverRepository;
-        private readonly IGenericRepository<Vehicle, Guid> _vehicleRepository;
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IMapper _mapper;
 
-        public OrderService(IOrderRepository orderRepository, IDriverRepository driverRepository, IGenericRepository<Vehicle, Guid> vehicleRepository)
+        public OrderService(IUnitOfWork unitOfWork, IMapper mapper)
         {
-            _orderRepository = orderRepository;
-            _driverRepository = driverRepository;
-            _vehicleRepository = vehicleRepository;
+            _unitOfWork = unitOfWork;
+            _mapper = mapper;
         }
 
-        // Оновлено метод для прийому OrderQueryParams
         public async Task<List<OrderResponse>> GetAllOrdersAsync(OrderQueryParams queryParams)
         {
-            // Отримуємо всі замовлення з включеними пов'язаними сутностями
-            var ordersQuery = (await _orderRepository.GetAllAsync()).AsQueryable();
+            var ordersQuery = _unitOfWork.GetRepository<Order, Guid>()
+                                         .AsQueryable();
 
             // === Фільтрування ===
             if (!string.IsNullOrWhiteSpace(queryParams.OriginAddress))
@@ -49,7 +48,7 @@ namespace TransportLogistics.Api.Services
             }
             if (queryParams.CreationDateTo.HasValue)
             {
-                ordersQuery = ordersQuery.Where(o => o.CreationDate <= queryParams.CreationDateTo.Value);
+                ordersQuery = ordersQuery.Where(o => o.CreationDate <= queryParams.CreationDateTo.Value.AddDays(1)); // Включаємо кінець дня
             }
             if (queryParams.MinPrice.HasValue)
             {
@@ -59,6 +58,11 @@ namespace TransportLogistics.Api.Services
             {
                 ordersQuery = ordersQuery.Where(o => o.Price <= queryParams.MaxPrice.Value);
             }
+
+            ordersQuery = ordersQuery.Include(o => o.Driver)
+                                     .Include(o => o.Vehicle)
+                                     .Include(o => o.Cargos);
+
 
             // === Сортування ===
             if (!string.IsNullOrWhiteSpace(queryParams.SortBy))
@@ -95,200 +99,218 @@ namespace TransportLogistics.Api.Services
                             ordersQuery.OrderByDescending(o => o.DestinationAddress) :
                             ordersQuery.OrderBy(o => o.DestinationAddress);
                         break;
+                    case "driverfirstname":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.Driver!.FirstName) :
+                            ordersQuery.OrderBy(o => o.Driver!.FirstName);
+                        break;
+                    case "vehiclelicenseplate":
+                        ordersQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            ordersQuery.OrderByDescending(o => o.Vehicle!.LicensePlate) :
+                            ordersQuery.OrderBy(o => o.Vehicle!.LicensePlate);
+                        break;
                     default:
-                        // За замовчуванням сортуємо за CreationDate, якщо поле невідоме
                         ordersQuery = ordersQuery.OrderBy(o => o.CreationDate);
                         break;
                 }
             }
             else
             {
-                // За замовчуванням сортуємо за Id, якщо SortBy не вказано
                 ordersQuery = ordersQuery.OrderBy(o => o.Id);
             }
 
             // === Пагінація ===
-            var pagedOrders = ordersQuery
+            var pagedOrders = await ordersQuery
                 .Skip(queryParams.Skip)
                 .Take(queryParams.PageSize)
-                .ToList(); // Виконуємо запит до БД
+                .ToListAsync();
 
-            return pagedOrders.Select(o => MapToOrderResponse(o)).ToList();
+            return _mapper.Map<List<OrderResponse>>(pagedOrders);
         }
 
         public async Task<OrderResponse?> GetOrderByIdAsync(Guid id)
         {
-            var order = await _orderRepository.GetByIdAsync(id);
+            var order = await _unitOfWork.GetRepository<Order, Guid>()
+                                         .GetByIdAsync(id, o => o.Driver!, o => o.Vehicle!, o => o.Cargos);
             if (order == null)
             {
                 return null;
             }
-            return MapToOrderResponse(order);
+            return _mapper.Map<OrderResponse>(order);
         }
 
         public async Task<OrderResponse> CreateOrderAsync(CreateOrderRequest request)
         {
+            // Перевіряємо існування водія
             if (request.DriverId.HasValue)
             {
-                var driverExists = await _driverRepository.GetByIdAsync(request.DriverId.Value);
+                var driverExists = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(request.DriverId.Value);
                 if (driverExists == null)
                 {
-                    throw new ArgumentException($"Driver with ID {request.DriverId.Value} not found.");
+                    throw new NotFoundException($"Driver with ID {request.DriverId.Value} not found.");
                 }
             }
 
+            // Перевіряємо існування транспортного засобу та його вантажопідйомність
+            Vehicle? vehicle = null;
             if (request.VehicleId.HasValue)
             {
-                var vehicleExists = await _vehicleRepository.GetByIdAsync(request.VehicleId.Value);
-                if (vehicleExists == null)
+                vehicle = await _unitOfWork.GetRepository<Vehicle, Guid>().GetByIdAsync(request.VehicleId.Value);
+                if (vehicle == null)
                 {
-                    throw new ArgumentException($"Vehicle with ID {request.VehicleId.Value} not found.");
+                    throw new NotFoundException($"Vehicle with ID {request.VehicleId.Value} not found.");
+                }
+                if (request.TotalWeightKg > vehicle.MaxWeightCapacityKg)
+                {
+                    throw new BadRequestException($"Vehicle (ID: {vehicle.Id}) cannot carry {request.TotalWeightKg} kg. Max weight capacity: {vehicle.MaxWeightCapacityKg} kg.");
+                }
+                if (request.TotalVolumeM3 > vehicle.MaxVolumeCapacityM3)
+                {
+                    throw new BadRequestException($"Vehicle (ID: {vehicle.Id}) cannot carry {request.TotalVolumeM3} m³. Max volume: {vehicle.MaxVolumeCapacityM3} m³.");
                 }
             }
 
-            var order = new Order
+            var order = _mapper.Map<Order>(request);
+            order.Id = Guid.NewGuid();
+            order.CreationDate = DateTime.UtcNow;
+            order.Status = OrderStatus.Pending;
+
+            if (request.Cargo != null && request.Cargo.Any())
             {
-                Id = Guid.NewGuid(),
-                OriginAddress = request.OriginAddress,
-                DestinationAddress = request.DestinationAddress,
-                ScheduledPickupDate = request.ScheduledPickupDate,
-                ScheduledDeliveryDate = request.ScheduledDeliveryDate,
-                Status = (OrderStatus)request.Status,
-                TotalWeightKg = request.TotalWeightKg,
-                TotalVolumeM3 = request.TotalVolumeM3,
-                Price = request.Price,
-                Notes = request.Notes,
-                CreationDate = DateTime.UtcNow,
-                DriverId = request.DriverId,
-                VehicleId = request.VehicleId,
-                Cargos = request.Cargo.Select(c => new Cargo
+                order.Cargos = _mapper.Map<ICollection<Cargo>>(request.Cargo);
+                foreach (var cargo in order.Cargos)
                 {
-                    Id = Guid.NewGuid(),
-                    Name = c.Name,
-                    WeightKg = c.WeightKg,
-                    VolumeM3 = c.VolumeM3,
-                    Quantity = c.Quantity
-                }).ToList()
-            };
-
-            await _orderRepository.AddAsync(order);
-
-            var createdOrderWithDetails = await _orderRepository.GetByIdAsync(order.Id);
-            return MapToOrderResponse(createdOrderWithDetails!);
-        }
-
-        public async Task<OrderResponse?> UpdateOrderAsync(Guid id, UpdateOrderRequest request)
-        {
-            var existingOrder = await _orderRepository.GetByIdAsync(id);
-            if (existingOrder == null)
-            {
-                return null;
-            }
-
-            if (request.DriverId.HasValue)
-            {
-                var driverExists = await _driverRepository.GetByIdAsync(request.DriverId.Value);
-                if (driverExists == null)
-                {
-                    throw new ArgumentException($"Driver with ID {request.DriverId.Value} not found.");
+                    cargo.Id = Guid.NewGuid();
+                    cargo.OrderId = order.Id;
                 }
             }
-
-            if (request.VehicleId.HasValue)
+            else
             {
-                var vehicleExists = await _vehicleRepository.GetByIdAsync(request.VehicleId.Value);
-                if (vehicleExists == null)
-                {
-                    throw new ArgumentException($"Vehicle with ID {request.VehicleId.Value} not found.");
-                }
+                order.Cargos = new List<Cargo>();
             }
 
-            existingOrder.OriginAddress = request.OriginAddress;
-            existingOrder.DestinationAddress = request.DestinationAddress;
-            existingOrder.ScheduledPickupDate = request.ScheduledPickupDate;
-            existingOrder.ActualPickupDate = request.ActualPickupDate;
-            existingOrder.ScheduledDeliveryDate = request.ScheduledDeliveryDate;
-            existingOrder.ActualDeliveryDate = request.ActualDeliveryDate;
-            existingOrder.Status = (OrderStatus)request.Status;
-            existingOrder.TotalWeightKg = request.TotalWeightKg;
-            existingOrder.TotalVolumeM3 = request.TotalVolumeM3;
-            existingOrder.Price = request.Price;
-            existingOrder.Notes = request.Notes;
-            existingOrder.DriverId = request.DriverId;
-            existingOrder.VehicleId = request.VehicleId;
+            await _unitOfWork.GetRepository<Order, Guid>().AddAsync(order);
+            await _unitOfWork.CompleteAsync();
 
-            existingOrder.Cargos.Clear();
-            foreach (var cargoDto in request.Cargo)
-            {
-                existingOrder.Cargos.Add(new Cargo
-                {
-                    Id = Guid.NewGuid(),
-                    Name = cargoDto.Name,
-                    WeightKg = cargoDto.WeightKg,
-                    VolumeM3 = cargoDto.VolumeM3,
-                    Quantity = cargoDto.Quantity
-                });
-            }
+            var createdOrder = await _unitOfWork.GetRepository<Order, Guid>()
+                                                 .GetByIdAsync(order.Id, o => o.Driver!, o => o.Vehicle!, o => o.Cargos);
 
-            await _orderRepository.UpdateAsync(existingOrder);
-
-            var updatedOrderWithDetails = await _orderRepository.GetByIdAsync(existingOrder.Id);
-            return MapToOrderResponse(updatedOrderWithDetails!);
+            return _mapper.Map<OrderResponse>(createdOrder);
         }
 
         public async Task<bool> DeleteOrderAsync(Guid id)
         {
-            var order = await _orderRepository.GetByIdAsync(id);
+            var order = await _unitOfWork.GetRepository<Order, Guid>().GetByIdAsync(id);
             if (order == null)
             {
                 return false;
             }
-            await _orderRepository.DeleteAsync(order);
+
+            if (order.Status == OrderStatus.InTransit || order.Status == OrderStatus.PickedUp)
+            {
+                throw new ConflictException($"Cannot delete order with ID {id} because it is currently in transit or picked up.");
+            }
+
+            _unitOfWork.GetRepository<Order, Guid>().Delete(order);
+            await _unitOfWork.CompleteAsync();
+
             return true;
         }
 
-        private OrderResponse MapToOrderResponse(Order order)
+        public async Task<OrderResponse?> UpdateOrderAsync(Guid id, UpdateOrderRequest request)
         {
-            if (order == null) return null!; // Додано null! для відповідності сигнатурі
-
-            return new OrderResponse
+            var orderToUpdate = await _unitOfWork.GetRepository<Order, Guid>()
+                                         .GetByIdAsync(id, o => o.Cargos);
+            if (orderToUpdate == null)
             {
-                Id = order.Id,
-                OriginAddress = order.OriginAddress,
-                DestinationAddress = order.DestinationAddress,
-                ScheduledPickupDate = order.ScheduledPickupDate,
-                ScheduledDeliveryDate = order.ScheduledDeliveryDate,
-                ActualPickupDate = order.ActualPickupDate,
-                ActualDeliveryDate = order.ActualDeliveryDate,
-                Status = (int)order.Status,
-                TotalWeightKg = order.TotalWeightKg,
-                TotalVolumeM3 = order.TotalVolumeM3,
-                Price = order.Price,
-                Notes = order.Notes,
-                CreationDate = order.CreationDate,
-                Driver = order.Driver != null ? new DriverInOrderDto
+                return null;
+            }
+
+            if (request.DriverId.HasValue && request.DriverId.Value != orderToUpdate.DriverId)
+            {
+                var driver = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(request.DriverId.Value);
+                if (driver == null)
                 {
-                    Id = order.Driver.Id,
-                    FirstName = order.Driver.FirstName,
-                    LastName = order.Driver.LastName,
-                    LicenseNumber = order.Driver.LicenseNumber
-                } : null,
-                Vehicle = order.Vehicle != null ? new VehicleInOrderDto
+                    throw new NotFoundException($"Driver with ID {request.DriverId.Value} not found.");
+                }
+            }
+
+            Vehicle? vehicle = null;
+            if (request.VehicleId.HasValue)
+            {
+                vehicle = await _unitOfWork.GetRepository<Vehicle, Guid>().GetByIdAsync(request.VehicleId.Value);
+                if (vehicle == null)
                 {
-                    Id = order.Vehicle.Id,
-                    Make = order.Vehicle.Make,
-                    Model = order.Vehicle.Model,
-                    LicensePlate = order.Vehicle.LicensePlate
-                } : null,
-                Cargos = order.Cargos?.Select(c => new CargoInOrderDto
+                    throw new NotFoundException($"Vehicle with ID {request.VehicleId.Value} not found.");
+                }
+                if (request.TotalWeightKg > vehicle.MaxWeightCapacityKg)
                 {
-                    Id = c.Id,
-                    Name = c.Name,
-                    WeightKg = c.WeightKg,
-                    VolumeM3 = c.VolumeM3,
-                    Quantity = c.Quantity
-                }).ToList() ?? new List<CargoInOrderDto>()
-            };
+                    throw new BadRequestException($"Vehicle (ID: {vehicle.Id}) cannot carry {request.TotalWeightKg} kg. Max capacity: {vehicle.MaxWeightCapacityKg} kg.");
+                }
+                if (request.TotalVolumeM3 > vehicle.MaxVolumeCapacityM3)
+                {
+                    throw new BadRequestException($"Vehicle (ID: {vehicle.Id}) cannot carry {request.TotalVolumeM3} m³. Max volume: {vehicle.MaxVolumeCapacityM3} m³.");
+                }
+            }
+
+
+            _mapper.Map(request, orderToUpdate);
+
+            if (request.Cargo != null)
+            {
+                var existingCargos = orderToUpdate.Cargos.ToList();
+                var requestCargoIds = request.Cargo.Where(c => c.Id != Guid.Empty).Select(c => c.Id).ToHashSet();
+
+                foreach (var existingCargo in existingCargos)
+                {
+                    if (!requestCargoIds.Contains(existingCargo.Id))
+                    {
+                        _unitOfWork.GetRepository<Cargo, Guid>().Delete(existingCargo);
+                    }
+                }
+
+                foreach (var cargoRequest in request.Cargo)
+                {
+                    if (cargoRequest.Id == Guid.Empty)
+                    {
+                        var newCargo = _mapper.Map<Cargo>(cargoRequest);
+                        newCargo.Id = Guid.NewGuid();
+                        newCargo.OrderId = orderToUpdate.Id;
+                        await _unitOfWork.GetRepository<Cargo, Guid>().AddAsync(newCargo);
+                    }
+                    else
+                    {
+                        var cargoToUpdate = existingCargos.FirstOrDefault(c => c.Id == cargoRequest.Id);
+                        if (cargoToUpdate != null)
+                        {
+                            _mapper.Map(cargoRequest, cargoToUpdate);
+                            _unitOfWork.GetRepository<Cargo, Guid>().Update(cargoToUpdate);
+                        }
+                        else
+                        {
+                            throw new BadRequestException($"Cargo with ID {cargoRequest.Id} not found for order {orderToUpdate.Id}.");
+                        }
+                    }
+                }
+            } else {
+                if (orderToUpdate.Cargos.Any())
+                {
+                    foreach(var existingCargo in orderToUpdate.Cargos.ToList())
+                    {
+                        _unitOfWork.GetRepository<Cargo, Guid>().Delete(existingCargo);
+                    }
+                }
+            }
+
+            _unitOfWork.GetRepository<Order, Guid>().Update(orderToUpdate);
+            await _unitOfWork.CompleteAsync();
+
+            var updatedOrder = await _unitOfWork.GetRepository<Order, Guid>()
+                                                 .GetByIdAsync(orderToUpdate.Id,
+                                                               o => o.Driver!,
+                                                               o => o.Vehicle!,
+                                                               o => o.Cargos);
+            return _mapper.Map<OrderResponse>(updatedOrder);
         }
     }
 }

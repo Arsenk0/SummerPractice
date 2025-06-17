@@ -16,48 +16,49 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using TransportLogistics.Api.Validators;
 using Microsoft.OpenApi.Models;
-using TransportLogistics.Api.Middleware; // Додано для ExceptionHandlingMiddleware
-using Microsoft.AspNetCore.Mvc; // Додано для ApiBehaviorOptions
-using FluentValidation.Results; // Додано для FluentValidation.Results.ValidationFailure
-using System.Linq; // Явно додано System.Linq для вирішення проблем з Select/SelectMany
-using TransportLogistics.Api.Exceptions; // Додано для вашого ValidationException
-using TransportLogistics.Api.DataSeeder; // !!! ДОДАНО для сідінгу !!!
+using Microsoft.AspNetCore.Mvc;
+using FluentValidation.Results;
+using System.Linq;
+using TransportLogistics.Api.Exceptions;
+using TransportLogistics.Api.DataSeeder;
+using TransportLogistics.Api.Middleware;
+using TransportLogistics.Api.UnitOfWork; // !!! ПЕРЕКОНАЙТЕСЬ, ЩО ЦЯ ДИРЕКТИВА ІСНУЄ ТА ПРАВИЛЬНА !!!
+using AutoMapper;
+using TransportLogistics.Api.Profiles;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Додаємо послуги до контейнера.
-
 builder.Services.AddControllers();
 
 // === Додаємо Fluent Validation ===
-builder.Services.AddFluentValidationAutoValidation(); // Автоматична валідація
-builder.Services.AddFluentValidationClientsideAdapters(); // Для клієнтської валідації (якщо використовується)
-// Реєструємо всі валідатори з поточної збірки, де знаходяться ваші валідатори
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateDriverRequestValidator>();
 
-// Налаштовуємо, щоб FluentValidation кидав виняток при валідації
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
-        // Правильна логіка для перетворення ModelState на список FluentValidation.Results.ValidationFailure
         var failures = context.ModelState
-            .Where(e => e.Value != null && e.Value.Errors.Any()) // Перевіряємо, що є помилки
-            .SelectMany(e => e.Value.Errors.Select(error => new FluentValidation.Results.ValidationFailure(e.Key, error.ErrorMessage)))
+            .Where(e => e.Value != null && e.Value.Errors.Any())
+            .SelectMany(e => e.Value!.Errors.Select(error => new FluentValidation.Results.ValidationFailure(e.Key, error.ErrorMessage)))
             .ToList();
 
         throw new TransportLogistics.Api.Exceptions.ValidationException(failures);
     };
 });
 
+// === Додаємо AutoMapper ===
+builder.Services.AddAutoMapper(typeof(MappingProfiles).Assembly);
+// ==========================
 
-// Додаємо Swagger/OpenAPI для документування API
+// Додаємо Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "TransportLogistics.Api", Version = "v1" });
-
-    // Визначаємо схему безпеки для JWT (Bearer Token)
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = @"JWT Authorization header using the Bearer scheme.
@@ -68,8 +69,6 @@ builder.Services.AddSwaggerGen(c =>
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-
-    // Додаємо вимоги безпеки для всіх операцій
     c.AddSecurityRequirement(new OpenApiSecurityRequirement()
     {
         {
@@ -93,33 +92,28 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Налаштування ASP.NET Identity
 builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
     {
-        // Налаштування вимог до пароля (можна зробити простішими для тестування)
         options.Password.RequireDigit = false;
         options.Password.RequiredLength = 6;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
         options.Password.RequireLowercase = false;
-        options.User.RequireUniqueEmail = true; // Вимагаємо унікальну пошту
+        options.User.RequireUniqueEmail = true;
     })
-    .AddEntityFrameworkStores<ApplicationDbContext>() // Вказуємо, що Identity буде використовувати EF Core
-    .AddDefaultTokenProviders(); // Додаємо провайдерів токенів для скидання пароля тощо
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
 
-// Реєстрація нашого JWT сервісу
+// Реєстрація наших JWT та Auth сервісів
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 // =======================================================================================
 // >>>>> ПОЧАТОК РЕЄСТРАЦІЙ РЕПОЗИТОРІЇВ ТА СЕРВІСІВ <<<<<
 
-// Реєстрація репозиторіїв
+// РЕЄСТРАЦІЯ UNIT OF WORK (ВИПРАВЛЕНО РЯДОК)
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // <<< --- ПЕРЕКОНАЙТЕСЬ, ЩО ТУТ ПРОСТО 'UnitOfWork'
+
+// Реєстрація GenericRepository повинна залишатися
 builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
-builder.Services.AddScoped<IDriverRepository, DriverRepository>();
-
-builder.Services.AddScoped<IGenericRepository<Order, Guid>, GenericRepository<Order, Guid>>();
-builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-
-builder.Services.AddScoped<IGenericRepository<Vehicle, Guid>, GenericRepository<Vehicle, Guid>>();
-
 
 // Реєстрація сервісів
 builder.Services.AddScoped<IDriverService, DriverService>();
@@ -160,8 +154,6 @@ builder.Services.AddAuthentication(options =>
 var app = builder.Build();
 
 // Конфігуруємо HTTP-пайплайн запитів.
-
-// Додаємо Middleware для обробки винятків на самому початку
 app.UseExceptionHandlingMiddleware();
 
 if (app.Environment.IsDevelopment())
@@ -169,8 +161,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-// app.UseHttpsRedirection();
 
 app.UseRouting();
 
@@ -180,8 +170,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 // === Додаємо логіку сідінгу бази даних ===
-// Цей блок виконується після побудови app, але до його запуску.
-// Використовуємо using-блок для створення Scope, щоб правильно отримати сервіси.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -191,13 +179,9 @@ using (var scope = app.Services.CreateScope())
         var userManager = services.GetRequiredService<UserManager<User>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-        // Застосовуємо міграції, якщо є
         context.Database.Migrate();
 
-        // Сідінг базових ролей та адміністратора
         await ApplicationDbContextSeed.SeedEssentialsAsync(userManager, roleManager);
-
-        // Сідінг прикладних даних
         await ApplicationDbContextSeed.SeedSampleDataAsync(context, userManager);
     }
     catch (Exception ex)

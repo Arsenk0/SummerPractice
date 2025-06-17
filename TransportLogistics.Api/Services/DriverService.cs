@@ -1,35 +1,39 @@
-// TransportLogistics.Api/Services/DriverService.cs
 using TransportLogistics.Api.Contracts;
 using TransportLogistics.Api.Data.Entities;
-using TransportLogistics.Api.DTOs;
-using TransportLogistics.Api.DTOs.QueryParams; // Додано для DriverQueryParams
+using TransportLogistics.Api.DTOs; // Базовий неймспейс для DTO
+using TransportLogistics.Api.DTOs.QueryParams;
+using TransportLogistics.Api.Exceptions;
+using TransportLogistics.Api.UnitOfWork;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore; // Додано для IQueryable розширень
+using AutoMapper;
 
 namespace TransportLogistics.Api.Services
 {
     public class DriverService : IDriverService
     {
-        private readonly IDriverRepository _driverRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<User> _userManager;
+        private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+        private readonly IMapper _mapper;
 
-        public DriverService(IDriverRepository driverRepository, UserManager<User> userManager)
+        public DriverService(IUnitOfWork unitOfWork, UserManager<User> userManager, RoleManager<IdentityRole<Guid>> roleManager, IMapper mapper)
         {
-            _driverRepository = driverRepository;
+            _unitOfWork = unitOfWork;
             _userManager = userManager;
+            _roleManager = roleManager;
+            _mapper = mapper;
         }
 
-        // Оновлено метод для прийому DriverQueryParams
         public async Task<List<DriverDto>> GetAllDriversAsync(DriverQueryParams queryParams)
         {
-            // Отримуємо всі драйвери
-            var driversQuery = (await _driverRepository.GetAllAsync()).AsQueryable();
+            var driversQuery = _unitOfWork.GetRepository<Driver, Guid>()
+                                          .AsQueryable();
 
-            // === Фільтрування ===
             if (!string.IsNullOrWhiteSpace(queryParams.FirstName))
             {
                 driversQuery = driversQuery.Where(d => d.FirstName.Contains(queryParams.FirstName));
@@ -47,7 +51,8 @@ namespace TransportLogistics.Api.Services
                 driversQuery = driversQuery.Where(d => d.IsAvailable == queryParams.IsAvailable.Value);
             }
 
-            // === Сортування ===
+            driversQuery = driversQuery.Include(d => d.User);
+
             if (!string.IsNullOrWhiteSpace(queryParams.SortBy))
             {
                 switch (queryParams.SortBy.ToLowerInvariant())
@@ -77,167 +82,171 @@ namespace TransportLogistics.Api.Services
                             driversQuery.OrderByDescending(d => d.IsAvailable) :
                             driversQuery.OrderBy(d => d.IsAvailable);
                         break;
+                    case "username":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.User!.UserName) :
+                            driversQuery.OrderBy(d => d.User!.UserName);
+                        break;
+                    case "email":
+                        driversQuery = queryParams.SortOrder.ToLowerInvariant() == "desc" ?
+                            driversQuery.OrderByDescending(d => d.User!.Email) :
+                            driversQuery.OrderBy(d => d.User!.Email);
+                        break;
                     default:
-                        // За замовчуванням сортуємо за FirstName, якщо поле невідоме
                         driversQuery = driversQuery.OrderBy(d => d.FirstName);
                         break;
                 }
             }
             else
             {
-                // За замовчуванням сортуємо за Id, якщо SortBy не вказано
                 driversQuery = driversQuery.OrderBy(d => d.Id);
             }
 
-            // === Пагінація ===
-            var pagedDrivers = driversQuery
+            var pagedDrivers = await driversQuery
                 .Skip(queryParams.Skip)
                 .Take(queryParams.PageSize)
-                .ToList(); // Виконуємо запит до БД
+                .ToListAsync();
 
-            var driverDtos = new List<DriverDto>();
-            foreach (var driver in pagedDrivers)
-            {
-                var user = await _userManager.FindByIdAsync(driver.UserId.ToString());
-                driverDtos.Add(new DriverDto
-                {
-                    Id = driver.Id,
-                    FirstName = driver.FirstName,
-                    LastName = driver.LastName,
-                    LicenseNumber = driver.LicenseNumber,
-                    DateOfBirth = driver.DateOfBirth,
-                    IsAvailable = driver.IsAvailable,
-                    UserId = driver.UserId,
-                    UserName = user?.UserName,
-                    Email = user?.Email
-                });
-            }
-            return driverDtos;
+            return _mapper.Map<List<DriverDto>>(pagedDrivers);
         }
 
         public async Task<DriverDto?> GetDriverByIdAsync(Guid id)
         {
-            var driver = await _driverRepository.GetByIdAsync(id);
+            var driver = await _unitOfWork.GetRepository<Driver, Guid>()
+                                          .GetByIdAsync(id, d => d.User);
             if (driver == null)
             {
-                return null;
+                throw new NotFoundException($"Driver with ID {id} not found.");
             }
-
-            var user = await _userManager.FindByIdAsync(driver.UserId.ToString());
-            return new DriverDto
-            {
-                Id = driver.Id,
-                FirstName = driver.FirstName,
-                LastName = driver.LastName,
-                LicenseNumber = driver.LicenseNumber,
-                DateOfBirth = driver.DateOfBirth,
-                IsAvailable = driver.IsAvailable,
-                UserId = driver.UserId,
-                UserName = user?.UserName,
-                Email = user?.Email
-            };
+            return _mapper.Map<DriverDto>(driver);
         }
 
         public async Task<DriverDto> CreateDriverAsync(CreateDriverRequest request)
         {
+            // Перевірка унікальності ліцензійного номера
+            var existingDriverWithLicense = await _unitOfWork.GetRepository<Driver, Guid>()
+                                                  .GetSingleOrDefaultAsync(d => d.LicenseNumber == request.LicenseNumber);
+            if (existingDriverWithLicense != null)
+            {
+                throw new ConflictException($"Driver with license number '{request.LicenseNumber}' already exists.");
+            }
+
+            // Перевірка, чи користувач з UserId існує
             var user = await _userManager.FindByIdAsync(request.UserId.ToString());
             if (user == null)
             {
-                throw new ArgumentException($"User with ID {request.UserId} not found.");
+                throw new NotFoundException($"User with ID {request.UserId} not found. A driver must be linked to an existing user.");
             }
 
-            var existingDriver = (await _driverRepository.FindAsync(d => d.UserId == request.UserId)).FirstOrDefault();
-            if (existingDriver != null)
+            // Перевірка, чи користувач вже не прив'язаний до іншого водія
+            var existingDriverForUser = await _unitOfWork.GetRepository<Driver, Guid>()
+                                                         .GetSingleOrDefaultAsync(d => d.UserId == request.UserId);
+            if (existingDriverForUser != null)
             {
-                throw new ArgumentException($"Driver already exists for User ID {request.UserId}.");
+                throw new ConflictException($"User with ID {request.UserId} is already associated with another driver.");
             }
 
-            var driver = new Driver
-            {
-                Id = Guid.NewGuid(),
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                LicenseNumber = request.LicenseNumber,
-                DateOfBirth = request.DateOfBirth,
-                IsAvailable = true,
-                UserId = request.UserId
-            };
+            // Створення сутності водія та прив'язка до існуючого користувача
+            var driver = _mapper.Map<Driver>(request);
+            driver.Id = Guid.NewGuid(); // Генеруємо ID для нового водія
+            driver.UserId = request.UserId; // Використовуємо UserId з запиту
+            driver.IsAvailable = true; // Встановлюємо початкове значення
 
-            await _driverRepository.AddAsync(driver);
+            await _unitOfWork.GetRepository<Driver, Guid>().AddAsync(driver);
+            await _unitOfWork.CompleteAsync(); // Зберігаємо водія
 
-            return new DriverDto
-            {
-                Id = driver.Id,
-                FirstName = driver.FirstName,
-                LastName = driver.LastName,
-                LicenseNumber = driver.LicenseNumber,
-                DateOfBirth = driver.DateOfBirth,
-                IsAvailable = driver.IsAvailable,
-                UserId = driver.UserId,
-                UserName = user.UserName,
-                Email = user.Email
-            };
+            // Повертаємо мапований DTO після збереження
+            var createdDriverWithUser = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(driver.Id, d => d.User);
+            return _mapper.Map<DriverDto>(createdDriverWithUser);
         }
 
         public async Task<DriverDto?> UpdateDriverAsync(Guid id, UpdateDriverRequest request)
         {
             if (id != request.Id)
             {
-                throw new ArgumentException("ID in URL does not match ID in request body.");
+                throw new BadRequestException("ID in URL does not match ID in request body.");
             }
 
-            var driverToUpdate = await _driverRepository.GetByIdAsync(id);
+            var driverToUpdate = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(id);
             if (driverToUpdate == null)
             {
-                return null;
+                throw new NotFoundException($"Driver with ID {id} not found.");
             }
 
+            // Перевірка унікальності ліцензійного номера, якщо він змінився
+            if (request.LicenseNumber != driverToUpdate.LicenseNumber)
+            {
+                var existingDriverWithLicense = await _unitOfWork.GetRepository<Driver, Guid>()
+                                                                .GetSingleOrDefaultAsync(d => d.LicenseNumber == request.LicenseNumber && d.Id != id);
+                if (existingDriverWithLicense != null)
+                {
+                    throw new ConflictException($"Driver with license number '{request.LicenseNumber}' already exists.");
+                }
+            }
+
+            // Перевірка, чи новий UserId існує і не прив'язаний до іншого водія
             if (request.UserId != driverToUpdate.UserId)
             {
                 var newUser = await _userManager.FindByIdAsync(request.UserId.ToString());
                 if (newUser == null)
                 {
-                    throw new ArgumentException($"New User with ID {request.UserId} not found.");
+                    throw new NotFoundException($"New User with ID {request.UserId} not found.");
                 }
-                var existingDriverForNewUser = (await _driverRepository.FindAsync(d => d.UserId == request.UserId && d.Id != id)).FirstOrDefault();
+                var existingDriverForNewUser = await _unitOfWork.GetRepository<Driver, Guid>()
+                                                                 .GetSingleOrDefaultAsync(d => d.UserId == request.UserId && d.Id != id);
                 if (existingDriverForNewUser != null)
                 {
-                    throw new ArgumentException($"Another driver already exists for New User ID {request.UserId}.");
+                    throw new ConflictException($"Another driver already exists for New User ID {request.UserId}.");
                 }
             }
 
-            driverToUpdate.FirstName = request.FirstName;
-            driverToUpdate.LastName = request.LastName;
-            driverToUpdate.LicenseNumber = request.LicenseNumber;
-            driverToUpdate.DateOfBirth = request.DateOfBirth;
-            driverToUpdate.IsAvailable = request.IsAvailable;
-            driverToUpdate.UserId = request.UserId;
+            // Оновлення полів водія
+            _mapper.Map(request, driverToUpdate);
+            // Важливо: Email, Password, FirstName, LastName користувача НЕ оновлюються через Driver DTO
+            // Якщо ці поля потрібно оновлювати, це має бути окремий API для User.
 
-            await _driverRepository.UpdateAsync(driverToUpdate);
+            _unitOfWork.GetRepository<Driver, Guid>().Update(driverToUpdate);
+            await _unitOfWork.CompleteAsync();
 
-            var user = await _userManager.FindByIdAsync(driverToUpdate.UserId.ToString());
-            return new DriverDto
-            {
-                Id = driverToUpdate.Id,
-                FirstName = driverToUpdate.FirstName,
-                LastName = driverToUpdate.LastName,
-                LicenseNumber = driverToUpdate.LicenseNumber,
-                DateOfBirth = driverToUpdate.DateOfBirth,
-                IsAvailable = driverToUpdate.IsAvailable,
-                UserId = driverToUpdate.UserId,
-                UserName = user?.UserName,
-                Email = user?.Email
-            };
+            var updatedDriverWithUser = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(driverToUpdate.Id, d => d.User);
+            return _mapper.Map<DriverDto>(updatedDriverWithUser);
         }
 
         public async Task<bool> DeleteDriverAsync(Guid id)
         {
-            var driverToDelete = await _driverRepository.GetByIdAsync(id);
+            var driverToDelete = await _unitOfWork.GetRepository<Driver, Guid>().GetByIdAsync(id);
             if (driverToDelete == null)
             {
                 return false;
             }
-            await _driverRepository.DeleteAsync(driverToDelete);
+
+            var activeOrders = await _unitOfWork.GetRepository<Order, Guid>()
+                                                 .GetManyAsync(o => o.DriverId == id &&
+                                                                   (o.Status == OrderStatus.Pending ||
+                                                                    o.Status == OrderStatus.Assigned ||
+                                                                    o.Status == OrderStatus.PickedUp ||
+                                                                    o.Status == OrderStatus.InTransit));
+            if (activeOrders.Any())
+            {
+                throw new ConflictException($"Cannot delete driver with ID {id} because there are active orders associated with them.");
+            }
+
+            if (driverToDelete.UserId != Guid.Empty)
+            {
+                var user = await _userManager.FindByIdAsync(driverToDelete.UserId.ToString());
+                if (user != null)
+                {
+                    var deleteUserResult = await _userManager.DeleteAsync(user);
+                    if (!deleteUserResult.Succeeded)
+                    {
+                        throw new BadRequestException($"Failed to delete user associated with driver: {string.Join(", ", deleteUserResult.Errors.Select(e => e.Description))}");
+                    }
+                }
+            }
+
+            _unitOfWork.GetRepository<Driver, Guid>().Delete(driverToDelete);
+            await _unitOfWork.CompleteAsync();
+
             return true;
         }
     }

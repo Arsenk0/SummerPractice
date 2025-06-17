@@ -1,4 +1,3 @@
-// TransportLogistics.Api/Repositories/GenericRepository.cs
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -21,42 +20,71 @@ namespace TransportLogistics.Api.Repositories
             _dbSet = context.Set<T>();
         }
 
-        public virtual async Task<T?> GetByIdAsync(TId id) // Зроблено virtual
+        private IQueryable<T> ApplyIncludes(IQueryable<T> query, params Expression<Func<T, object>>[] includeProperties)
         {
-            return await _dbSet.FindAsync(id);
+            foreach (var includeProperty in includeProperties)
+            {
+                query = query.Include(includeProperty);
+            }
+            return query;
         }
 
-        public virtual async Task<List<T>> GetAllAsync() // Зроблено virtual, повертає List<T>
+        public virtual async Task<T?> GetByIdAsync(TId id, params Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> query = _dbSet;
+            query = ApplyIncludes(query, includeProperties);
+            return await query.SingleOrDefaultAsync(e => EF.Property<TId>(e, "Id")!.Equals(id));
+        }
+
+        public virtual async Task<List<T>> GetAllAsync()
         {
             return await _dbSet.ToListAsync();
+        }
+
+        public virtual async Task<List<T>> GetAllAsync(params Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> query = _dbSet;
+            query = ApplyIncludes(query, includeProperties);
+            return await query.ToListAsync();
         }
 
         public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate)
         {
             return await _dbSet.Where(predicate).ToListAsync();
         }
+        
+        public async Task<T?> GetSingleOrDefaultAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> query = _dbSet;
+            query = ApplyIncludes(query, includeProperties);
+            return await query.SingleOrDefaultAsync(predicate);
+        }
+
+        public async Task<IEnumerable<T>> GetManyAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includeProperties)
+        {
+            IQueryable<T> query = _dbSet;
+            query = ApplyIncludes(query, includeProperties);
+            return await query.Where(predicate).ToListAsync();
+        }
 
         public async Task AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
-            await SaveChangesAsync();
         }
 
-        public async Task UpdateAsync(T entity)
+        public void Update(T entity)
         {
             _dbSet.Update(entity);
-            await SaveChangesAsync();
         }
 
-        public async Task DeleteAsync(T entity)
+        public void Delete(T entity)
         {
             _dbSet.Remove(entity);
-            await SaveChangesAsync();
         }
-
-        public async Task SaveChangesAsync()
+        
+        public IQueryable<T> AsQueryable()
         {
-            await _context.SaveChangesAsync();
+            return _dbSet.AsQueryable();
         }
     }
 }

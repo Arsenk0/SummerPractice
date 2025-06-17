@@ -1,186 +1,98 @@
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using TransportLogistics.Api.Contracts;
-using TransportLogistics.Api.Data.Entities;
-using TransportLogistics.Api.DTOs;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
-using System.Linq; // Додано для SelectMany
-using System.Security.Claims; // !!! ДОДАНО ЦЕЙ РЯДОК !!!
+    using Microsoft.AspNetCore.Mvc;
+    using TransportLogistics.Api.Contracts;
+    using TransportLogistics.Api.DTOs; // Ця директива потрібна для UserRegistrationRequest, UserLoginRequest, AuthResult, TokenRequest
+    using System.Threading.Tasks;
+    // using Microsoft.AspNetCore.Identity; // Закоментовано, бо UserManager більше не використовується тут напряму
+    // using TransportLogistics.Api.Data.Entities; // Закоментовано, бо User Entity не використовується тут напряму
+    using System.Linq; // Залишено, якщо потрібно для .Select
 
-namespace TransportLogistics.Api.Controllers
-{
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    namespace TransportLogistics.Api.Controllers
     {
-        private readonly UserManager<User> _userManager;
-        private readonly SignInManager<User> _signInManager;
-        private readonly IJwtTokenService _jwtTokenService;
-        private readonly ILogger<AuthController> _logger;
-
-        public AuthController(
-            UserManager<User> userManager,
-            SignInManager<User> signInManager,
-            IJwtTokenService jwtTokenService,
-            ILogger<AuthController> logger)
+        [ApiController]
+        [Route("api/[controller]")]
+        public class AuthController : ControllerBase
         {
-            _userManager = userManager;
-            _signInManager = signInManager;
-            _jwtTokenService = jwtTokenService;
-            _logger = logger;
-        }
+            private readonly IAuthService _authService;
+            // UserManager<User> та RoleManager більше не потрібні в цьому контролері,
+            // оскільки методи управління ролями/паролями були видалені.
+            // Якщо ви захочете їх повернути, то UserManager потрібно буде додати назад.
 
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest model)
-        {
-            if (!ModelState.IsValid)
+            public AuthController(IAuthService authService) // Прибрано UserManager та RoleManager з конструктора
             {
-                return BadRequest(new AuthResult
-                {
-                    Errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList(),
-                    Success = false
-                });
+                _authService = authService;
             }
 
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
+            [HttpPost("register")]
+            public async Task<IActionResult> Register([FromBody] UserRegistrationRequest request) // Використовуємо UserRegistrationRequest
             {
-                return BadRequest(new AuthResult
+                var response = await _authService.RegisterAsync(request);
+                if (!response.Success)
                 {
-                    Errors = new List<string> { "Email already exists" },
-                    Success = false
-                });
-            }
-
-            var newUser = new User
-            {
-                Email = model.Email,
-                UserName = model.Email, // Зазвичай email використовується як UserName для входу
-                FirstName = model.FirstName, // Це поле тепер є в User.cs
-                LastName = model.LastName    // Це поле тепер є в User.cs
-            };
-
-            var isCreated = await _userManager.CreateAsync(newUser, model.Password);
-
-            if (!isCreated.Succeeded)
-            {
-                var errors = new List<string>();
-                foreach (var error in isCreated.Errors)
-                {
-                    errors.Add(error.Description);
+                    return BadRequest(response.Errors);
                 }
-                return BadRequest(new AuthResult
+                return Ok(response);
+            }
+
+            [HttpPost("login")]
+            public async Task<IActionResult> Login([FromBody] UserLoginRequest request) // Використовуємо UserLoginRequest
+            {
+                var response = await _authService.LoginAsync(request);
+                if (!response.Success)
                 {
-                    Errors = errors,
-                    Success = false
-                });
+                    return Unauthorized(response.Errors);
+                }
+                return Ok(response);
             }
 
-            // Опціонально: автоматичний вхід після реєстрації
-            await _signInManager.SignInAsync(newUser, isPersistent: false); // !!! ЗМІНЕНО ЦЕЙ РЯДОК !!!
-
-            // Генерація токенів
-            var accessToken = await _jwtTokenService.GenerateAccessToken(newUser);
-            var refreshToken = await _jwtTokenService.GenerateRefreshToken(newUser);
-
-            _logger.LogInformation($"User {newUser.Email} registered successfully.");
-
-            return Ok(new AuthResult
+            [HttpPost("refresh-token")]
+            public async Task<IActionResult> RefreshToken([FromBody] TokenRequest request)
             {
-                Token = accessToken,
-                RefreshToken = refreshToken,
-                Success = true
-            });
-        }
-
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(new AuthResult
+                var response = await _authService.RefreshTokenAsync(request);
+                if (!response.Success)
                 {
-                    Errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList(),
-                    Success = false
-                });
+                    return Unauthorized(response.Errors);
+                }
+                return Ok(response);
             }
 
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser == null)
+            // !!! ВАЖЛИВО: НАСТУПНІ МЕТОДИ БУЛИ ВИДАЛЕНІ !!!
+            // Оскільки DTO для них (AssignRoleRequest, RevokeRoleRequest, UpdatePasswordRequest,
+            // ForgotPasswordRequest, ResetPasswordRequest) не існують у вашому проекті.
+            // Якщо ви хочете додати цю функціональність, вам потрібно буде:
+            // 1. Створити відповідні DTO-файли у TransportLogistics.Api/DTOs.
+            // 2. Реалізувати відповідну логіку (можливо, в AuthService або окремому сервісі).
+            // 3. Розкоментувати ці методи тут або створити нові.
+            /*
+            [HttpPost("assign-role")]
+            public async Task<IActionResult> AssignRole([FromBody] AssignRoleRequest request)
             {
-                return BadRequest(new AuthResult
-                {
-                    Errors = new List<string> { "Invalid authentication credentials" },
-                    Success = false
-                });
+                throw new NotImplementedException("AssignRole endpoint requires corresponding DTO and AuthService implementation.");
             }
 
-            var isCorrectPassword = await _userManager.CheckPasswordAsync(existingUser, model.Password);
-
-            if (!isCorrectPassword)
+            [HttpPost("revoke-role")]
+            public async Task<IActionResult> RevokeRole([FromBody] RevokeRoleRequest request)
             {
-                return BadRequest(new AuthResult
-                {
-                    Errors = new List<string> { "Invalid authentication credentials" },
-                    Success = false
-                });
+                throw new NotImplementedException("RevokeRole endpoint requires corresponding DTO and AuthService implementation.");
             }
 
-            // Генерація токенів
-            var accessToken = await _jwtTokenService.GenerateAccessToken(existingUser);
-            var refreshToken = await _jwtTokenService.GenerateRefreshToken(existingUser);
-
-            _logger.LogInformation($"User {existingUser.Email} logged in successfully.");
-
-            return Ok(new AuthResult
+            [HttpPost("update-password")]
+            public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequest request)
             {
-                Token = accessToken,
-                RefreshToken = refreshToken,
-                Success = true
-            });
-        }
-
-        // Додаємо метод для оновлення токена (refresh token)
-        [HttpPost("refresh")]
-        public async Task<IActionResult> RefreshToken([FromBody] TokenRequest request)
-        {
-            var authResult = new AuthResult { Success = false };
-
-            if (string.IsNullOrEmpty(request.Token) || string.IsNullOrEmpty(request.RefreshToken))
-            {
-                authResult.Errors.Add("Invalid client request");
-                return BadRequest(authResult);
+                throw new NotImplementedException("UpdatePassword endpoint requires corresponding DTO and AuthService implementation.");
             }
 
-            var principal = _jwtTokenService.GetPrincipalFromExpiredToken(request.Token);
-            // Поле ClaimTypes.NameIdentifier тепер розпізнається завдяки using System.Security.Claims;
-            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (userId == null)
+            [HttpPost("forgot-password")]
+            public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
             {
-                authResult.Errors.Add("Invalid token claims");
-                return BadRequest(authResult);
+                throw new NotImplementedException("ForgotPassword endpoint requires corresponding DTO and AuthService implementation.");
             }
 
-            var user = await _userManager.FindByIdAsync(userId);
-
-            if (user == null)
+            [HttpPost("reset-password")]
+            public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
             {
-                authResult.Errors.Add("Invalid refresh token");
-                return BadRequest(authResult);
+                throw new NotImplementedException("ResetPassword endpoint requires corresponding DTO and AuthService implementation.");
             }
-
-            var newAccessToken = await _jwtTokenService.GenerateAccessToken(user);
-            var newRefreshToken = await _jwtTokenService.GenerateRefreshToken(user);
-
-            return Ok(new AuthResult
-            {
-                Token = newAccessToken,
-                RefreshToken = newRefreshToken,
-                Success = true
-            });
+            */
         }
     }
-}
+    
