@@ -1,0 +1,13 @@
+// TransportLogistics.Api/DTOs/AuthResult.cs
+using System.Collections.Generic;
+
+namespace TransportLogistics.Api.DTOs
+{
+    public class AuthResult
+    {
+        public string? Token { get; set; }
+        public string? RefreshToken { get; set; }
+        public bool Success { get; set; }
+        public List<string>? Errors { get; set; }
+    }
+}
